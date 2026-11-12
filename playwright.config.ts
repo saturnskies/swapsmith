@@ -7,7 +7,7 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? 'github' : 'list',
-  // The Scryfall client spaces searches 500 ms apart, so pricing a full 100-card deck takes ~8 s.
+  // The Scryfall client spaces searches 500 ms apart: pricing a full 100-card deck takes ~3 s, Find suggestions ~10 s.
   expect: { timeout: 15_000 },
   timeout: 60_000,
   use: {
