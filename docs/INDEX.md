@@ -19,10 +19,12 @@ Status: **current** = in force or in progress; **draft** = proposed, not approve
 - [ADR-003-android-apk-capacitor.md](decisions/ADR-003-android-apk-capacitor.md) — current, 2026-11-02 — Builds the Android APK with Capacitor, bundling the built site, with debug-signed builds for sideloading and no Play Store release yet
 - [ADR-004-apk-signing-and-data-safety.md](decisions/ADR-004-apk-signing-and-data-safety.md) — current, 2026-11-02 — One permanent signing key for every Swapsmith APK, deck backup and restore in the app, and the rules that keep users' decks across updates
 - [ADR-005-edhrec-commander-data.md](decisions/ADR-005-edhrec-commander-data.md) — current, 2026-11-04 — Uses EDHREC's unofficial per-commander JSON (inclusion, synergy, themes, brackets, average deck) as the main recommendation signal, called from the browser, with Scryfall rules as the fallback
+- [ADR-006-cheapest-printing-search-and-bounded-cache.md](decisions/ADR-006-cheapest-printing-search-and-bounded-cache.md) — current, 2026-11-12 — Prices a deck with one cheapest-printing search per ~15 cards instead of downloading every printing, loads printings only when the picker opens, and keeps the reply cache bounded and usable offline for a week
 - [README.md](decisions/README.md) — current, 2026-10-29 — How to write ADRs: naming, front matter, status rules, never rewrite accepted ADRs
 
 ## docs/research/
 
+- [2026-11-12-market-positioning.md](research/2026-11-12-market-positioning.md) — current, 2026-11-12 — Where Swapsmith sits among Commander deck tools (Moxfield, Archidekt, EDHREC, ManaBox and newer entrants), what already sets it apart, and ranked ways to set it apart further
 - [edgar-markov-deck-pricing-opus.md](research/edgar-markov-deck-pricing-opus.md) — current, 2026-11-02 — TCGplayer price guide for the Edgar Markov Vampires Commander deck (cheapest printings, spot-checked) plus budget/mid/premium upgrades; Opus re-check of the Sonnet guide
 - [edgar-markov-deck-pricing.md](research/edgar-markov-deck-pricing.md) — current, 2026-11-02 — TCGplayer-based price guide for the Edgar Markov Commander deck, with upgrade options by price tier
 
@@ -41,7 +43,7 @@ Status: **current** = in force or in progress; **draft** = proposed, not approve
 
 ## docs/superpowers/specs/
 
-- [2026-11-02-swapsmith-design.md](superpowers/specs/2026-11-02-swapsmith-design.md) — current, 2026-11-05 — Swapsmith v1 design spec — free static Commander deckbuilder with live TCGplayer prices via Scryfall, owned-card tracking, and rules-based swap/upgrade/cheaper-replacement suggestions
+- [2026-11-02-swapsmith-design.md](superpowers/specs/2026-11-02-swapsmith-design.md) — current, 2026-11-12 — Swapsmith v1 design spec — free static Commander deckbuilder with live TCGplayer prices via Scryfall, owned-card tracking, and rules-based swap/upgrade/cheaper-replacement suggestions
 - [2026-11-03-recommendations-revamp.md](superpowers/specs/2026-11-03-recommendations-revamp.md) — current, 2026-11-04 — Recommendations revamp spec — EDHREC per-commander deck data (inclusion, synergy, themes, brackets, average deck) as the main signal, grouped by card category with gap hints, and a wider Scryfall rules fallback
 - [2026-11-04-browse-tab.md](superpowers/specs/2026-11-04-browse-tab.md) — current, 2026-11-04 — Browse tab spec — search every card by name, set, type, tribe, keyword, role, color identity, mana value, rarity and price (plus raw Scryfall syntax), image grid or list, sorting, Load more, and a card detail with Add to deck and Mark as owned
 - [2026-11-04-tab-bar-life-counter.md](superpowers/specs/2026-11-04-tab-bar-life-counter.md) — current, 2026-11-04 — Tab bar and Life Counter spec — bottom tabs (Decks, Browse, Life Counter) with hash routes and per-tab place, plus an offline 1–6 player life counter with commander damage, poison, undo, wake lock and a saved game
