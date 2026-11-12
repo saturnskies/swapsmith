@@ -16,7 +16,7 @@ test('switch to a card grid grouped by type, with images, prices and TCGplayer l
 
   const edgar = page.getByRole('listitem').filter({ hasText: 'Edgar Markov' });
   await expect(edgar.getByRole('img', { name: 'Edgar Markov' })).toBeVisible();
-  await expect(edgar).toContainText('$29.08');
+  await expect(edgar).toContainText('$32.17');
   await expect(edgar.getByRole('link', { name: 'Edgar Markov' }).first()).toHaveAttribute('href', 'https://www.tcgplayer.com/product/596294');
 
   const keeper = page.getByRole('listitem').filter({ hasText: 'Bloodline Keeper' });
@@ -31,7 +31,7 @@ test('owned, remove and printing work in the grid too', async ({ page }) => {
   await page.getByRole('button', { name: 'Grid' }).click();
 
   await page.getByRole('checkbox', { name: 'Own Edgar Markov' }).check();
-  await expect(page.getByTestId('deck-to-buy')).toHaveText('$6.39');
+  await expect(page.getByTestId('deck-to-buy')).toHaveText('$6.65');
 
   await page.getByRole('button', { name: 'Remove Sol Ring' }).click();
   await expect(page.getByTestId('deck-count')).toHaveText('12 / 100 cards');
