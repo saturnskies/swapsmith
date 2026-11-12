@@ -103,7 +103,9 @@ export function withPrinting(p: PricedCard, printing: ScryCard | undefined): Pri
   else delete entry.printingId;
   const pick = printing ?? p.cheapest;
   if (!pick) return { ...p, entry, price: null, finish: null };
-  return { ...p, entry, ...at(pick) };
+  // The printing is in hand, so whatever failed to load before no longer applies.
+  const { failed: _failed, ...rest } = p;
+  return { ...rest, entry, ...at(pick) };
 }
 
 /** Prices every card in a deck at its pinned or cheapest printing. Reports progress as cards are priced. */
