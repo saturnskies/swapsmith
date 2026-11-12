@@ -10,7 +10,7 @@ test('rules-based upgrades fit the deck, by category, with a price filter', asyn
   const misses = await mockScryfall(page, edgarFull);
   const deck = await seedEdgarDeck(page);
   await page.goto(`./#/deck/${deck.id}`);
-  await expect(page.getByTestId('deck-total')).toHaveText('$119.73');
+  await expect(page.getByTestId('deck-total')).toHaveText('$120.90');
 
   await showPane(page, 'Suggestions');
   await page.getByRole('button', { name: 'Find suggestions' }).click();
@@ -107,7 +107,7 @@ test('swap a weak card for a suggestion, then undo it', async ({ page }) => {
   await showPane(page, 'Cards');
   await expect(page.getByRole('row').filter({ hasText: 'Purify' })).toBeVisible();
   await expect(page.getByRole('row').filter({ hasText: 'Woe Strider' })).toHaveCount(0);
-  await expect(page.getByTestId('deck-total')).toHaveText('$119.73');
+  await expect(page.getByTestId('deck-total')).toHaveText('$120.90');
   expect(misses).toEqual([]);
 });
 
@@ -138,12 +138,12 @@ test('replace an expensive card with a cheaper one that does the same job', asyn
   await panel.getByRole('button', { name: 'Cheaper' }).click();
 
   const group = panel.getByRole('region', { name: 'Cheaper than Minas Tirith' });
-  await expect(group).toContainText('Minas Tirith · $6.08');
-  await expect(group.getByRole('listitem').first()).toContainText('Fountainport');
-  await expect(group.getByRole('listitem').filter({ hasText: 'Buried Ruin' })).toContainText('Save $5.81');
+  await expect(group).toContainText('Minas Tirith · $5.53');
+  await expect(group.getByRole('listitem').first()).toContainText('Buried Ruin');
+  await expect(group.getByRole('listitem').filter({ hasText: 'Buried Ruin' })).toContainText('Save $5.26');
   await group.getByRole('button', { name: 'Swap Minas Tirith for Buried Ruin' }).click();
 
-  await expect(page.getByTestId('deck-total')).toHaveText('$113.92');
+  await expect(page.getByTestId('deck-total')).toHaveText('$115.63');
   await showPane(page, 'Cards');
   await expect(page.getByRole('row').filter({ hasText: 'Buried Ruin' })).toBeVisible();
   await expect(page.getByRole('row').filter({ hasText: 'Minas Tirith' })).toHaveCount(0);
@@ -200,13 +200,13 @@ test('clicking two swaps for the same card at once swaps it only once', async ({
   // Both clicks land before either swap finishes.
   await group.evaluate((el) => el.querySelectorAll<HTMLButtonElement>('button').forEach((b, i) => i < 2 && b.click()));
   await showPane(page, 'Cards');
-  // The first two options are Fountainport and Buried Ruin.
-  await expect(page.getByRole('row').filter({ hasText: 'Fountainport' })).toBeVisible();
+  // The first two options are Buried Ruin and Haven of the Spirit Dragon.
+  await expect(page.getByRole('row').filter({ hasText: 'Buried Ruin' })).toBeVisible();
   // Let any second swap finish too, so the checks below see the settled deck, not a moment in between.
   await page.waitForTimeout(5000);
 
   await expect(page.getByTestId('deck-count')).toHaveText('100 / 100 cards');
-  await expect(page.getByRole('row').filter({ hasText: 'Buried Ruin' })).toHaveCount(0);
+  await expect(page.getByRole('row').filter({ hasText: 'Haven of the Spirit Dragon' })).toHaveCount(0);
   await expect(page.getByRole('row').filter({ hasText: 'Minas Tirith' })).toHaveCount(0);
 });
 
