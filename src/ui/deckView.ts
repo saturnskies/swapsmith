@@ -5,7 +5,7 @@ import { cardWarnings, DECK_SIZE, isBasicLand, warningText } from '../lib/format
 import { cardImage, compareLines, GROUP_ORDER, groupByType, typeGroup, typeName, type SortKey } from '../lib/groups';
 import { deckCollection, isOwned, setOwned as setOwnedIn, stillToBuy } from '../lib/owned';
 import { sortPrintings } from '../lib/price';
-import { autocompleteNames, cardByName } from '../scryfall/cards';
+import { autocompleteNames, cardByName, printings, PRINTINGS_PAGE } from '../scryfall/cards';
 import { oracleIdOf, priceDeck, priceEntries, withPrinting, type PricedCard } from '../scryfall/resolve';
 import type { ScryCard } from '../scryfall/types';
 import type { AppContext } from './app';
@@ -219,45 +219,73 @@ function renderDeckPage(view: HTMLElement, ctx: AppContext, start: Deck, readOnl
   };
 
   // ---- Printing picker ------------------------------------------------------------------------
+  // A card's printings are loaded when its picker opens (one cached request), not with the deck (ADR-006).
   const picker = h('dialog', { class: 'picker', 'aria-labelledby': 'picker-h' });
-  const choosePrinting = (p: PricedCard, printingId: string | undefined) => {
-    const next = withPrinting(p, printingId);
-    priced = priced.map((x) => (x === p ? next : x));
+  /** Each opening bumps this; a printings reply for a picker that was reopened (or closed) meanwhile is ignored. */
+  let pickerRun = 0;
+  /** The card as it is in the deck now: it may have been replaced (a Keep, another copy) since the picker opened. */
+  const current = (p: PricedCard) => priced.find((x) => x.isCommander === p.isCommander && x.entry.card.oracleId === p.entry.card.oracleId);
+  const choosePrinting = (p: PricedCard, printing: ScryCard | undefined) => {
+    const now = current(p);
     picker.close();
-    if (p.isCommander) commit(cardsOf(), { commanderPrintingId: printingId });
+    if (!now) return;
+    const next = withPrinting(now, printing);
+    priced = priced.map((x) => (x === now ? next : x));
+    if (now.isCommander) commit(cardsOf(), { commanderPrintingId: printing?.id });
     else commit(cardsOf());
   };
-  const openPicker = (p: PricedCard) => {
+  const openPicker = async (p: PricedCard) => {
+    const run = ++pickerRun;
     const name = p.entry.card.name;
+    const close = h('button', { type: 'button', class: 'button' }, 'Close');
+    close.addEventListener('click', () => picker.close());
+    const head = h('div', { class: 'picker-head' }, h('h3', { id: 'picker-h' }, `Printings of ${name}`), close);
+    picker.replaceChildren(head, h('p', { class: 'muted small', role: 'status' }, 'Loading printings…'));
+    if (!picker.open) picker.showModal();
+
+    let prints: ScryCard[];
+    try {
+      prints = await printings(ctx.client, p.entry.card.oracleId);
+    } catch {
+      if (run !== pickerRun || !picker.open) return;
+      const retry = h('button', { type: 'button', class: 'button' }, 'Try again');
+      retry.addEventListener('click', () => void openPicker(p));
+      picker.replaceChildren(head, h('p', { class: 'notice', role: 'alert' }, SCRYFALL_DOWN), h('div', { class: 'actions' }, retry));
+      return;
+    }
+    if (run !== pickerRun || !picker.open) return;
+    // Re-find after the wait (ui-state rules): the card may have been replaced or removed meanwhile.
+    const now = current(p);
+    if (!now) return picker.close();
+    // The printing in use is always listed, even when it is outside the search (a pinned promo, or past the first page).
+    if (now.card && !prints.some((c) => c.id === now.card!.id)) prints = [...prints, now.card];
+
     const fmt = (v: string | null) => (v ? usd(Number(v)) : null);
-    const items = sortPrintings(p.prints).map((c) => {
-      const current = c.id === p.card?.id;
+    const items = sortPrintings(prints).map((c) => {
+      const inUse = c.id === now.card?.id;
       const finishes = [
         fmt(c.prices.usd) && `Nonfoil ${fmt(c.prices.usd)}`,
         fmt(c.prices.usd_foil) && `Foil ${fmt(c.prices.usd_foil)}`,
         fmt(c.prices.usd_etched) && `Etched ${fmt(c.prices.usd_etched)}`,
       ].filter(Boolean);
       const use = h('button', { type: 'button', class: 'button' }, 'Use this printing');
-      use.addEventListener('click', () => choosePrinting(p, c.id));
+      use.addEventListener('click', () => choosePrinting(now, c));
       return h(
         'li',
-        { class: current ? 'current' : '' },
+        { class: inUse ? 'current' : '' },
         h('div', { class: 'picker-name' }, h('strong', {}, `${c.set.toUpperCase()} #${c.collector_number}`), h('span', { class: 'muted' }, c.set_name)),
         h('span', { class: 'picker-prices' }, finishes.length ? finishes.join(' · ') : 'No price'),
-        current ? h('span', { class: 'tag' }, 'Current') : use,
+        inUse ? h('span', { class: 'tag' }, 'Current') : use,
       );
     });
     const cheapest = h('button', { type: 'button', class: 'button primary' }, 'Use the cheapest printing');
-    cheapest.addEventListener('click', () => choosePrinting(p, undefined));
-    const close = h('button', { type: 'button', class: 'button' }, 'Close');
-    close.addEventListener('click', () => picker.close());
+    cheapest.addEventListener('click', () => choosePrinting(now, undefined));
     picker.replaceChildren(
-      h('div', { class: 'picker-head' }, h('h3', { id: 'picker-h' }, `Printings of ${name}`), close),
-      h('p', { class: 'muted small' }, isBasicLand(p.typeLine) ? 'The cheapest 175 printings, cheapest first.' : `${p.prints.length} paper printings, cheapest first. Prices are each printing's cheapest finish.`),
+      head,
+      h('p', { class: 'muted small' }, prints.length >= PRINTINGS_PAGE ? `The cheapest ${PRINTINGS_PAGE} printings, cheapest first.` : `${prints.length} paper printings, cheapest first. Prices are each printing's cheapest finish.`),
       h('ul', { class: 'picker-list' }, ...items),
-      h('div', { class: 'actions' }, p.entry.printingId ? cheapest : null),
+      h('div', { class: 'actions' }, now.entry.printingId ? cheapest : null),
     );
-    picker.showModal();
   };
 
   // ---- Adding ---------------------------------------------------------------------------------
@@ -570,7 +598,7 @@ function cardControls(p: PricedCard, { onRemove, owned, onOwned, onPrinting, onK
     return box;
   };
   const printingControl = () => {
-    if (readOnly || !p.prints.length) return h('span', {}, printing);
+    if (readOnly || !p.cheapest) return h('span', {}, printing);
     const btn = h('button', { type: 'button', class: 'link-button', 'aria-label': `Change printing of ${name}`, title: 'Change printing' }, printing, ' ▾');
     btn.addEventListener('click', () => onPrinting(p));
     return btn;
