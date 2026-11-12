@@ -12,7 +12,7 @@ const keyOf = (q: string) => `GET /cards/search?${new URLSearchParams({ q, order
 const results = (q: string) => (browseSearches[keyOf(q)].body as { data: Card[] }).data;
 const named = (q: string, name: string) => results(q).find((c) => c.name === name)!;
 const oracleOf = (c: Card) => c.oracle_id ?? (c.card_faces![0] as Face & { oracle_id: string }).oracle_id;
-/** The recorded printings of a card, and the cheapest price among their finishes. */
+/** The recorded cheapest printing of a card (a list of one), and the cheapest price among its finishes. */
 const printingsOf = (c: Card) => (browseSearches[Object.keys(browseSearches).find((k) => k.includes(`oracleid%3A${oracleOf(c)}`))!].body as { data: Card[] }).data;
 function cheapest(prints: Card[]) {
   let best: { price: number; card: Card; etched: boolean } | null = null;
@@ -120,7 +120,7 @@ test('a single-faced card has no Flip button', async ({ page }) => {
 
 test.describe('what the detail says when data is odd', () => {
   test('printings that cannot be loaded leave the price of the card as shown, with a note', async ({ page }) => {
-    await page.route((u) => u.hostname === 'api.scryfall.com' && (u.searchParams.get('q') ?? '').startsWith('oracleid:'), (route) => route.fulfill({ status: 503, json: { object: 'error', details: 'Service Unavailable' } }));
+    await page.route((u) => u.hostname === 'api.scryfall.com' && (u.searchParams.get('q') ?? '').startsWith('(oracleid:'), (route) => route.fulfill({ status: 503, json: { object: 'error', details: 'Service Unavailable' } }));
     const ghast = named(CRYPT, 'Crypt Ghast');
     const { dialog } = await open(page, 'Crypt Ghast');
     await expect(dialog.getByText(/Couldn't check other printings/)).toBeVisible();
