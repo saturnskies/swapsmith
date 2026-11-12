@@ -15,4 +15,7 @@ if grep -q "\"$plugin\"" "$installed" 2>/dev/null; then
   exit 0
 fi
 
+# A fresh container's copy of the marketplace can be out of date and not list the plugin yet
+# ("Plugin not found in marketplace", seen 2026-11-12); refresh it first. A failed refresh is not fatal.
+claude plugin marketplace update claude-plugins-official || true
 claude plugin install "$plugin"
