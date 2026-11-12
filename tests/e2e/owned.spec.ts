@@ -1,21 +1,21 @@
 import { expect, test } from '@playwright/test';
 import { edgarFull, mockScryfall, pasteAndFix, seedTwoEdgarDecks, showPane, suggestionsPanel } from './helpers';
 
-// Deck from tests/fixtures/e2e-list.txt: total $36.35, of which 8 Swamps ($0.88) are owned by default.
+// Deck from tests/fixtures/e2e-list.txt: total $39.54, of which 8 Swamps ($0.72) are owned by default.
 
 test('basic lands count as owned, and ticking cards lowers what is still to buy', async ({ page }) => {
   const misses = await mockScryfall(page);
   await pasteAndFix(page);
-  await expect(page.getByTestId('deck-total')).toHaveText('$36.35');
-  await expect(page.getByTestId('deck-to-buy')).toHaveText('$35.47');
+  await expect(page.getByTestId('deck-total')).toHaveText('$39.54');
+  await expect(page.getByTestId('deck-to-buy')).toHaveText('$38.82');
   await expect(page.getByRole('checkbox', { name: 'Own Swamp' })).toBeChecked();
 
   await page.getByRole('checkbox', { name: 'Own Edgar Markov' }).check();
-  await expect(page.getByTestId('deck-to-buy')).toHaveText('$6.39');
+  await expect(page.getByTestId('deck-to-buy')).toHaveText('$6.65');
 
   await page.getByRole('checkbox', { name: 'Own Swamp' }).uncheck();
-  await expect(page.getByTestId('deck-to-buy')).toHaveText('$7.27');
-  await expect(page.getByTestId('deck-total')).toHaveText('$36.35');
+  await expect(page.getByTestId('deck-to-buy')).toHaveText('$7.37');
+  await expect(page.getByTestId('deck-total')).toHaveText('$39.54');
   expect(misses).toEqual([]);
 });
 
@@ -23,7 +23,7 @@ test('owned cards are remembered across reloads, and belong to one deck only', a
   await mockScryfall(page);
   await pasteAndFix(page, 'First');
   await page.getByRole('checkbox', { name: 'Own Sol Ring' }).check();
-  await expect(page.getByTestId('deck-to-buy')).toHaveText('$34.37');
+  await expect(page.getByTestId('deck-to-buy')).toHaveText('$37.54');
 
   await page.reload();
   await expect(page.getByRole('checkbox', { name: 'Own Sol Ring' })).toBeChecked();
@@ -31,14 +31,14 @@ test('owned cards are remembered across reloads, and belong to one deck only', a
   // A physical card is in one deck at a time: owning Sol Ring for First says nothing about Second.
   await pasteAndFix(page, 'Second');
   await expect(page.getByRole('checkbox', { name: 'Own Sol Ring' })).not.toBeChecked();
-  await expect(page.getByTestId('deck-to-buy')).toHaveText('$35.47');
+  await expect(page.getByTestId('deck-to-buy')).toHaveText('$38.82');
 
   await page.getByRole('link', { name: 'Swapsmith' }).click();
-  await expect(page.getByRole('listitem').filter({ hasText: 'First' })).toContainText('$34.37 to buy');
-  await expect(page.getByRole('listitem').filter({ hasText: 'Second' })).toContainText('$35.47 to buy');
+  await expect(page.getByRole('listitem').filter({ hasText: 'First' })).toContainText('$37.54 to buy');
+  await expect(page.getByRole('listitem').filter({ hasText: 'Second' })).toContainText('$38.82 to buy');
 });
 
-// Minas Tirith ($6.08) has cheaper replacements unless it is owned.
+// Minas Tirith ($5.53) has cheaper replacements unless it is owned.
 const MINAS = '7b0d7e62-0287-454a-8702-b0bfa7b41245';
 
 test('ticking a card in one deck leaves it unticked in another deck that has it', async ({ page }) => {
@@ -117,9 +117,9 @@ test('pick a different printing, then go back to the cheapest', async ({ page })
   await expect(dialog).toBeHidden();
   const edgar = page.getByRole('row').filter({ hasText: 'Edgar Markov' });
   await expect(edgar).toContainText('INR #328');
-  await expect(edgar).toContainText('$32.66');
+  await expect(edgar).toContainText('$33.40');
   await expect(edgar.getByRole('link', { name: 'Edgar Markov' })).toHaveAttribute('href', 'https://www.tcgplayer.com/product/596295');
-  await expect(page.getByTestId('deck-total')).toHaveText('$39.93');
+  await expect(page.getByTestId('deck-total')).toHaveText('$40.77');
 
   await page.reload();
   await expect(page.getByRole('row').filter({ hasText: 'Edgar Markov' })).toContainText('INR #328');
@@ -127,6 +127,12 @@ test('pick a different printing, then go back to the cheapest', async ({ page })
   await page.getByRole('button', { name: 'Change printing of Edgar Markov' }).click();
   await page.getByRole('button', { name: 'Use the cheapest printing' }).click();
   await expect(page.getByRole('row').filter({ hasText: 'Edgar Markov' })).toContainText('INR #428');
-  await expect(page.getByTestId('deck-total')).toHaveText('$36.35');
+  await expect(page.getByTestId('deck-total')).toHaveText('$39.54');
+
+  // A printing that only comes in foil is priced at its foil, and says so.
+  await page.getByRole('button', { name: 'Change printing of Edgar Markov' }).click();
+  await dialog.getByRole('listitem').filter({ hasText: 'C17 #36' }).getByRole('button', { name: 'Use this printing' }).click();
+  await expect(edgar).toContainText('Foil');
+  await expect(edgar).toContainText('$42.51');
   expect(misses).toEqual([]);
 });
