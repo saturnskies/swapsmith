@@ -271,5 +271,11 @@ describe('priceEntries when Scryfall answers only in part', () => {
     expect(priced[0]).toMatchObject({ failed: true, price: null, cheapest: { id: 'print-a' } });
     expect(priced[1]).toMatchObject({ price: 1 });
     expect(priced[1].failed).toBeUndefined();
+
+    // Going back to the cheapest printing, which did load, prices the card and clears the failure.
+    const reset = withPrinting(priced[0], undefined);
+    expect(reset).toMatchObject({ price: 1, card: { id: 'print-a' } });
+    expect(reset.failed).toBeUndefined();
+    expect(reset.entry.printingId).toBeUndefined();
   });
 });
