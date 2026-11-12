@@ -136,3 +136,26 @@ test('pick a different printing, then go back to the cheapest', async ({ page })
   await expect(edgar).toContainText('$42.51');
   expect(misses).toEqual([]);
 });
+
+test('the printing picker says so when printings cannot be loaded, and Try again loads them', async ({ page }) => {
+  await mockScryfall(page);
+  await pasteAndFix(page);
+  // A card's printings are asked for when its picker opens (unique=prints); the deck's own prices are not.
+  const printings = /api\.scryfall\.com\/cards\/search\?.*unique=prints/;
+  await page.route(printings, (route) => route.abort());
+
+  await page.getByRole('button', { name: 'Change printing of Edgar Markov' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Printings of Edgar Markov' });
+  await expect(dialog.getByRole('status')).toHaveText('Loading printings…');
+  // The client retries a dropped request (1 s, 2 s, 4 s) before giving up.
+  await expect(dialog.getByRole('alert')).toContainText("Couldn't reach Scryfall", { timeout: 30_000 });
+  await expect(dialog.getByRole('listitem')).toHaveCount(0);
+  await expect(page.getByTestId('deck-total')).toHaveText('$39.54'); // the deck is untouched
+
+  await page.unroute(printings);
+  await dialog.getByRole('button', { name: 'Try again' }).click();
+  await expect(dialog.getByRole('listitem').first()).toContainText('INR #428');
+  await expect(dialog.getByRole('alert')).toHaveCount(0);
+  await dialog.getByRole('button', { name: 'Close' }).click();
+  await expect(dialog).toBeHidden();
+});
