@@ -1,7 +1,7 @@
 ---
 description: Swapsmith v1 design spec — free static Commander deckbuilder with live TCGplayer prices via Scryfall, owned-card tracking, and rules-based swap/upgrade/cheaper-replacement suggestions
 status: current
-updated: 2026-11-05
+updated: 2026-11-12
 ---
 
 # Swapsmith v1: design spec
@@ -50,22 +50,24 @@ Every card fact and price comes from the free public [Scryfall API](https://scry
   |---|---|
   | Autocomplete names | `GET /cards/autocomplete?q=` |
   | Look up up to 75 cards in one call | `POST /cards/collection` |
-  | All printings of a card (cheapest price, printing picker) | `GET /cards/search?q=oracleid:<id>&unique=prints` |
+  | Cheapest printing of up to ~15 cards (deck prices, Browse card detail) | `GET /cards/search?q=(oracleid:<id> or …) prefer:usd-low&unique=cards` |
+  | All printings of one card (printing picker, when it opens) | `GET /cards/search?q=oracleid:<id>&unique=prints` |
   | Suggestion and role searches | `GET /cards/search?q=` |
 
 **Being a good API citizen.** Scryfall asks clients to stay under about 10 requests a second and to cache data.
 
 - All requests go through one client module.
 - That module queues requests, about 100 ms apart, and retries on HTTP 429 with backoff.
-- It caches responses in IndexedDB for 24 hours, keyed by URL. Prices only change daily, so a reopened deck loads mostly from cache.
+- It caches responses in IndexedDB for 24 hours, keyed by URL. Prices only change daily, so a reopened deck loads mostly from cache. A reply up to a week old is used when Scryfall can't be reached, with a note that prices may be out of date; older replies are deleted ([ADR-006](../../decisions/ADR-006-cheapest-printing-search-and-bounded-cache.md)).
+- Two callers asking for the same thing at once share one request.
 - The footer credits Scryfall. The site never charges for Scryfall data, which Scryfall's terms require.
 
-**Load cost.** A deck is priced in about 15 requests:
-- 2 collection lookups.
-- A few batched printings searches, each covering about 15 Oracle IDs OR-ed together, following every page.
-- One price-filtered search per basic land.
+**Load cost** (since 2026-11-12, [ADR-006](../../decisions/ADR-006-cheapest-printing-search-and-bounded-cache.md)). A 100-card deck is priced in about 6 requests:
+- One search per ~15 cards for each card's cheapest paper printing (`prefer:usd-low`, one result per card).
+- One batched lookup for the printings a user picked, when there are any.
+- One lookup for cards with no paper printing, when there are any, so they still show by name and type.
 
-The full 100-card Edgar list was priced in 8 s against the live API on 2026-11-02, and a reload takes 0.1 s from the cache.
+The 100-card Edgar list (78 different cards) was priced in 3.3 s and 0.4 MB against the live API on 2026-11-12. Before that, every printing of every card was downloaded: 16 requests, 10.8 MB and 7.6 s for the same deck.
 
 **Scryfall behaviour found while building (2026-11-02):**
 - **Query length:** queries longer than about 1,000 characters are silently cut short, so batches stay under 900.
@@ -133,7 +135,7 @@ A share link holds the deck in the URL hash (`#d=<data>`), so no server is neede
   - **Grid:** card images grouped by type (Creatures, Instants, Sorceries, Artifacts, Enchantments, Planeswalkers, Lands, and Battles if any). Each tile shows price, an owned tick and a remove button.
   - **List:** one row per card with name (hover or tap to see the image), type, printing, qty, price, owned and remove. Columns can be sorted.
 - **Card links:** every card name and image links to that printing's TCGplayer page in a new tab.
-- **Printing picker:** opened from a card. It lists every paper printing with set, number, finish (nonfoil, foil or etched) and price, cheapest first. You can pick one, or reset to cheapest.
+- **Printing picker:** opened from a card. It loads and lists the card's paper printings (the cheapest 175 for a card with more) with set, number, finish (nonfoil, foil or etched) and price, cheapest first. You can pick one, or reset to cheapest.
 - **Rename and delete deck:** deleting asks for confirmation in the page.
 - **Share:** copies the share link.
 
@@ -271,6 +273,7 @@ Each slice works end to end and is gated by its tests. The detailed plan comes n
 
 ## Decisions after review (2026-11-02)
 
+- **Cheapest printing comes from Scryfall, not from a list of every printing (2026-11-12).** See [ADR-006](../../decisions/ADR-006-cheapest-printing-search-and-bounded-cache.md): a deck loads in about a third of the requests, a foil of another printing that undercuts every nonfoil is no longer picked automatically, and the app keeps week-old prices for offline use.
 - **Repo name:** the repo is renamed `swapsmith` on GitHub, so the site lives at `https://saturnskies.github.io/swapsmith/`. Vite's `base` is `/swapsmith/`.
 - **Basic lands are owned by default.** Unticking one records it in the deck's `unownedBasics`. Still-to-buy totals exclude owned basics.
 - **Owned belongs to each deck (2026-11-05).** Each deck stores `owned` and `unownedBasics` itself; nothing is shared between decks, in suggestions, totals, backups or restores. Data saved before this change (one list for every deck) is migrated when it loads or when an old backup is restored: each deck gets the ticks for the cards it contains, so it looks exactly as it did, and the old shared list is dropped. A deck that already has its own ticks is never overwritten. The storage key and package id are unchanged ([ADR-004](../../decisions/ADR-004-apk-signing-and-data-safety.md)). Edge cases, all deliberate: ticks made by an old cached copy of the app after the upgrade are dropped for any deck that already has its own ticks; legacy ticks for cards that were in no deck at migration time survive only in the untouched safety copy (`swapsmith:v1:before-owned-per-deck`, written once, never read); and the old top-level lists leave storage on the next save, not at load. A restore keeps the newer copy of a deck together with its ticks, so the other copy's ticks are replaced, not combined. Ticking a card counts as editing the deck (`updatedAt`), so it moves that deck up the home list. Plan: [owned per deck](../plans/2026-11-05-owned-per-deck.md).
