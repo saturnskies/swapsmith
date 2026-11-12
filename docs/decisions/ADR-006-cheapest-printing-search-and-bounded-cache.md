@@ -27,6 +27,7 @@ Scryfall's documented limit for `/cards/search` is 2 requests a second (its rate
 - **Printings load when the picker opens**, one cached request per card (`printings`), not with the deck. A deck entry with a picked printing looks all picked printings up in one batched call when the deck is priced.
 - **The Browse card detail uses the same lookup**, so Browse and the deck never disagree about a card's cheapest price.
 - **The reply cache is bounded and works offline** (`src/scryfall/client.ts`): replies are fresh for 24 hours as before; a reply up to 7 days old is used when the host cannot be reached (at once when the device reports it is offline, otherwise after the usual retries, and for a 429 or 5xx that outlasts them), and the app says prices may be out of date; anything older is deleted once a session. The IndexedDB database moved to version 2 with an index on the save time, and version 1's contents are dropped on upgrade.
+- **Find suggestions asks first for what its opening list needs.** Requests leave in the order they are made, two a second. The deck's role checks (a dozen searches, used by Swaps and Cheaper) now start after the Upgrades list has asked for its cards instead of before, and the Game Changers count reads Scryfall's whole list in one cached request shared by every deck instead of searching each deck's names. Measured live in a browser on 2026-11-12 for the Edgar deck: first upgrades shown in 4.4 s, down from 9 to 10 s; Swaps settles at about 12 s as before.
 - **Identical requests in flight are shared**: a second caller waits for the first one's reply instead of taking another slot in the 2-a-second queue.
 - **The app shell is saved at install.** The build writes `precache.json` (every built file); `public/sw.js` saves those, the page and the icons when it installs, serves built files from the saved copy without a request, and drops built files a newer deploy no longer lists. Bricolage Grotesque is served from `src/fonts/` (SIL Open Font License, licence alongside) instead of Google Fonts.
 
@@ -54,7 +55,7 @@ Scryfall's documented limit for `/cards/search` is 2 requests a second (its rate
 
 ## Consequences
 
-- First load of a 100-card deck drops from about 8 s to about 3 s, and from 10.8 MB to 0.4 MB of JSON; the cache holds about 0.4 MB per deck and at most a week of replies.
+- First load of a 100-card deck drops from about 8 s to about 3 s (2.3 to 2.7 s measured in a browser), and from 10.8 MB to 0.4 MB of JSON; a reload within 24 hours takes about 0.15 s. The cache holds about 0.4 MB per deck and at most a week of replies.
 - Opening the printing picker waits for one request the first time (then 24 h cached). A card with more than 175 printings (basic lands, Sol Ring) lists its cheapest 175 priced ones.
 - A foil of another printing that is cheaper than every nonfoil is no longer chosen automatically (about 1 card in 100).
 - A deck whose every card has a picked printing (a list pasted with set codes) needs 2 extra requests for the picked printings.
