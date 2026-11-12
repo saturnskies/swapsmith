@@ -24,16 +24,6 @@ export function bestPrice(card: ScryCard): PriceInfo | null {
   return best;
 }
 
-/** The cheapest printing of a card across all finishes; the first one wins ties. */
-export function cheapestPrinting(prints: ScryCard[]): (PriceInfo & { card: ScryCard }) | null {
-  let best: (PriceInfo & { card: ScryCard }) | null = null;
-  for (const card of prints) {
-    const p = bestPrice(card);
-    if (p && (!best || p.price < best.price)) best = { ...p, card };
-  }
-  return best;
-}
-
 /** A direct TCGplayer product link for a printing, without Scryfall's affiliate redirect. */
 export function tcgplayerUrl(card: ScryCard, finish: Finish): string {
   const id = finish === 'etched' && card.tcgplayer_etched_id ? card.tcgplayer_etched_id : card.tcgplayer_id;
