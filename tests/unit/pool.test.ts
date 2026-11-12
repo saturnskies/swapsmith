@@ -60,9 +60,9 @@ describe('deckCardFacts', () => {
     const { deckCardFacts } = await import('../../src/scryfall/suggest');
     const facts = deckCardFacts(
       [
-        { entry: { card: { oracleId: 'o-ok', name: 'Ok' }, qty: 1 }, isCommander: false, card: { name: 'Ok', edhrec_rank: 10 } as never, typeLine: 'Creature', price: 1, finish: 'nonfoil', url: null, prints: [] },
-        { entry: { card: { oracleId: 'o-gone', name: 'Gone' }, qty: 1 }, isCommander: false, card: null, typeLine: '', price: null, finish: null, url: null, prints: [] },
-        { entry: { card: { oracleId: 'o-fail', name: 'Failed' }, qty: 1 }, isCommander: false, card: { name: 'Failed' } as never, typeLine: 'Creature', price: null, finish: null, url: null, prints: [], failed: true },
+        { entry: { card: { oracleId: 'o-ok', name: 'Ok' }, qty: 1 }, isCommander: false, card: { name: 'Ok', edhrec_rank: 10 } as never, typeLine: 'Creature', price: 1, finish: 'nonfoil', url: null, cheapest: null },
+        { entry: { card: { oracleId: 'o-gone', name: 'Gone' }, qty: 1 }, isCommander: false, card: null, typeLine: '', price: null, finish: null, url: null, cheapest: null },
+        { entry: { card: { oracleId: 'o-fail', name: 'Failed' }, qty: 1 }, isCommander: false, card: { name: 'Failed' } as never, typeLine: 'Creature', price: null, finish: null, url: null, cheapest: null, failed: true },
       ],
       new Map(),
       [],
