@@ -15,7 +15,9 @@ export function h<K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Attrs = 
   return el;
 }
 
-export const usd = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
+// One formatter for the whole app: building one per price made every redraw of a 100-card list build hundreds.
+const USD = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
+export const usd = (n: number) => USD.format(n);
 
 /** A 24×24 line icon from SVG path data written in our own code (never card data). Decorative: hidden from screen readers. */
 export function icon(...paths: string[]): SVGSVGElement {
