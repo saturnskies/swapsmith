@@ -1,5 +1,5 @@
 import type { ParsedLine } from '../lib/parse';
-import { SCRYFALL_BASE, ScryfallError, type ScryfallClient } from './client';
+import { ScryfallError, type ScryfallClient } from './client';
 import type { ScryCard, ScryList } from './types';
 
 const COLLECTION_LIMIT = 75; // Scryfall's maximum identifiers per /cards/collection call
@@ -92,12 +92,19 @@ export async function cardsByPrintingId(client: ScryfallClient, printingIds: str
   return new Map((await collection(client, unique.map((id) => ({ id })))).map((c) => [c.id, c]));
 }
 
+/** Paper printings worth pricing: no oversized cards, gold borders or memorabilia sets. */
+const PRINT_FILTERS = 'game:paper -st:memorabilia -is:oversized -border:gold';
+
+/** How many printings Scryfall returns in one page of a search. */
+export const PRINTINGS_PAGE = 175;
+
 export const PRINTINGS_QUERY = (oracleId: string) => `oracleid:${oracleId} ${PRINT_FILTERS}`;
 
 /**
- * Paper printings of a card, sorted by nonfoil price. Scryfall sorts unpriced printings first, so a
- * card with more than one page of printings (basic lands, Sol Ring) is fetched again filtered to
- * priced ones; then only the cheapest page is seen, and a foil-only cheaper printing could be missed.
+ * Paper printings of one card, sorted by nonfoil price, for the printing picker and the Browse card
+ * detail. Scryfall sorts unpriced printings first, so a card with more than one page of printings
+ * (basic lands, Sol Ring) is fetched again filtered to priced ones; then only the cheapest page
+ * (PRINTINGS_PAGE) is seen, and a foil-only cheaper printing could be missed.
  */
 export async function printings(client: ScryfallClient, oracleId: string): Promise<ScryCard[]> {
   const search = async (q: string) => {
@@ -116,17 +123,17 @@ export async function printings(client: ScryfallClient, oracleId: string): Promi
 // Scryfall silently drops the end of a query past ~1,000 characters (checked 2026-11-02), so
 // batches stop well short of that.
 const MAX_QUERY_CHARS = 900;
-const MAX_PAGES = 12; // 175 printings a page; a safety stop
 
-const PRINT_FILTERS = 'game:paper -st:memorabilia -is:oversized -border:gold';
-const orQuery = (ids: string[]) => `(${ids.map((id) => `oracleid:${id}`).join(' or ')}) ${PRINT_FILTERS}`;
+// `prefer:usd-low` makes Scryfall answer with each card's lowest-priced printing (a foil-only card's
+// foil printing), so one result per card is enough to price it.
+const cheapestQuery = (ids: string[]) => `(${ids.map((id) => `oracleid:${id}`).join(' or ')}) ${PRINT_FILTERS} prefer:usd-low`;
 
 /** Splits Oracle IDs into groups whose OR query stays within MAX_QUERY_CHARS. */
 function queryBatches(ids: string[]): string[][] {
   const out: string[][] = [];
   let current: string[] = [];
   for (const id of ids) {
-    if (current.length && orQuery([...current, id]).length > MAX_QUERY_CHARS) {
+    if (current.length && cheapestQuery([...current, id]).length > MAX_QUERY_CHARS) {
       out.push(current);
       current = [];
     }
@@ -137,53 +144,35 @@ function queryBatches(ids: string[]): string[][] {
 }
 
 /**
- * Paper printings for many cards in a few searches: about 15 Oracle IDs are OR-ed into one query and
- * every page is followed, so a deck needs a handful of requests instead of one per card. Use
- * `printings` for basic lands, whose hundreds of printings would swamp a shared search.
+ * The lowest-priced paper printing of each card, in one search per ~15 cards: a 100-card deck needs
+ * about 6 requests (ADR-006). A card with no paper printing is left out of `cards`. A batch that
+ * fails is listed in `failed` and the others are kept. `onBatch` reports each batch as it settles.
  */
-export async function printingsForMany(client: ScryfallClient, oracleIds: string[]): Promise<Map<string, ScryCard[]>> {
-  const out = new Map<string, ScryCard[]>(oracleIds.map((id) => [id, []]));
+export async function cheapestPrintings(
+  client: ScryfallClient,
+  oracleIds: string[],
+  onBatch: (ids: string[]) => void = () => {},
+): Promise<{ cards: Map<string, ScryCard>; failed: Set<string> }> {
+  const cards = new Map<string, ScryCard>();
+  const failed = new Set<string>();
   await Promise.all(
     queryBatches([...new Set(oracleIds)]).map(async (ids) => {
-      const q = orQuery(ids);
-      let path: string | null = `/cards/search?${new URLSearchParams({ q, unique: 'prints', order: 'usd', dir: 'asc' })}`;
-      for (let page = 0; path && page < MAX_PAGES; page += 1) {
-        let res: ScryList<ScryCard> & { next_page?: string };
-        try {
-          res = await client.get(path);
-        } catch (e) {
-          if (e instanceof ScryfallError && e.status === 404) break;
-          throw new PrintingsError(ids, e);
-        }
-        for (const c of res.data) {
+      const wanted = new Set(ids);
+      try {
+        const res = await client.get<ScryList<ScryCard>>(`/cards/search?${new URLSearchParams({ q: cheapestQuery(ids), unique: 'cards' })}`);
+        for (const c of res.data ?? []) {
           const id = c.oracle_id ?? c.card_faces?.[0]?.oracle_id;
-          if (id) out.get(id)?.push(c);
+          if (id && wanted.has(id)) cards.set(id, c);
         }
-        path = res.has_more && res.next_page?.startsWith(SCRYFALL_BASE) ? res.next_page.slice(SCRYFALL_BASE.length) : null;
+      } catch (e) {
+        // 404: none of these cards has a paper printing.
+        if (!(e instanceof ScryfallError && e.status === 404)) for (const id of ids) failed.add(id);
+      } finally {
+        onBatch(ids);
       }
-    }).map((p) => p.catch((e) => {
-      if (e instanceof PrintingsError) for (const id of e.oracleIds) out.delete(id);
-      else throw e;
-    })),
+    }),
   );
-  return out;
-}
-
-/** A batch of printings that couldn't be loaded; its cards are left out of the result. */
-class PrintingsError extends Error {
-  constructor(readonly oracleIds: string[], readonly cause: unknown) {
-    super('printings unavailable');
-  }
-}
-
-/** One printing by its Scryfall ID, or null if it no longer exists. */
-export async function cardById(client: ScryfallClient, id: string): Promise<ScryCard | null> {
-  try {
-    return await client.get<ScryCard>(`/cards/${encodeURIComponent(id)}`);
-  } catch (e) {
-    if (e instanceof ScryfallError && e.status === 404) return null;
-    throw e;
-  }
+  return { cards, failed };
 }
 
 const MIN_QUERY = 2;
