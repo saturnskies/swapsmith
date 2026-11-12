@@ -582,19 +582,22 @@ export function suggestionsPanel(
     actions.onSearch('searching');
     draw();
 
-    // The deck's own roles, for matching swaps and cheaper replacements by job.
-    deckRoles(ctx.client, cards.filter((c) => !c.isCommander).map((c) => ({ oracleId: c.entry.card.oracleId, name: c.entry.card.name })))
-      .then(({ roles: r, complete }) => {
-        if (mine !== run) return;
-        roles = r;
-        rolesState = complete ? 'ok' : 'approx';
-        draw();
-      })
-      .catch(() => {
-        if (mine !== run) return;
-        rolesState = 'approx';
-        draw();
-      });
+    // The deck's own roles, for matching swaps and cheaper replacements by job. Started once the Upgrades list
+    // has asked for what it needs: requests go out in the order they are made, two a second, and these
+    // (a dozen searches) would otherwise hold up the list the panel opens on.
+    const lookupDeckRoles = () =>
+      deckRoles(ctx.client, cards.filter((c) => !c.isCommander).map((c) => ({ oracleId: c.entry.card.oracleId, name: c.entry.card.name })))
+        .then(({ roles: r, complete }) => {
+          if (mine !== run) return;
+          roles = r;
+          rolesState = complete ? 'ok' : 'approx';
+          draw();
+        })
+        .catch(() => {
+          if (mine !== run) return;
+          rolesState = 'approx';
+          draw();
+        });
 
     // What decks with this commander play (EDHREC); v1's rules-based pool starts only if it has nothing.
     if (!commanderName) startPool();
@@ -607,7 +610,7 @@ export function suggestionsPanel(
         bracket = saved || null;
         bracketFrom = { kind: 'saved' };
       } else {
-        const gameChangers = await gameChangerCount(ctx.client, cards.map((c) => c.entry.card.name));
+        const gameChangers = await gameChangerCount(ctx.client, cards.map((c) => c.entry.card.oracleId));
         if (mine !== run) return;
         bracket = gameChangers == null ? null : estimateBracket(gameChangers);
         bracketFrom = gameChangers == null ? { kind: 'unknown' } : { kind: 'estimated', gameChangers };
@@ -615,6 +618,7 @@ export function suggestionsPanel(
       await loadPage({ ...ALL_DECKS, bracket, budget: price === 'budget' });
     })();
     await fromEdhrec;
+    if (mine === run) void lookupDeckRoles();
     await poolJob;
     if (mine === run) {
       find.disabled = false;
