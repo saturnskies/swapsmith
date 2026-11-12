@@ -14,7 +14,7 @@ async function startEdgarDeck(page: Page) {
   await pick(page, 'Commander', 'edgar', 'Edgar Markov');
   await expect(page.getByText('Commander: Edgar Markov')).toBeVisible();
   await page.getByRole('button', { name: 'Create deck' }).click();
-  await expect(page.getByTestId('deck-total')).toHaveText('$29.08');
+  await expect(page.getByTestId('deck-total')).toHaveText('$32.17');
 }
 
 test('start a deck from a commander and add cards by search', async ({ page }) => {
@@ -28,8 +28,8 @@ test('start a deck from a commander and add cards by search', async ({ page }) =
   await expect(page.getByRole('option')).toHaveText(['Sol Ring']);
   await page.getByRole('option', { name: 'Sol Ring' }).click();
 
-  await expect(page.getByRole('row').filter({ hasText: 'Sol Ring' })).toContainText('$1.10');
-  await expect(page.getByTestId('deck-total')).toHaveText('$30.18');
+  await expect(page.getByRole('row').filter({ hasText: 'Sol Ring' })).toContainText('$1.28');
+  await expect(page.getByTestId('deck-total')).toHaveText('$33.45');
   await expect(page.getByTestId('deck-count')).toHaveText('2 / 100 cards');
   await expect(page.getByRole('combobox', { name: 'Add a card' })).toHaveValue('');
   expect(misses).toEqual([]);
@@ -72,7 +72,7 @@ test('remove a card, and the deck survives a reload', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Remove Edgar Markov' })).toHaveCount(0);
 
   await page.reload();
-  await expect(page.getByTestId('deck-total')).toHaveText('$30.18');
+  await expect(page.getByTestId('deck-total')).toHaveText('$33.45');
   await expect(page.getByRole('row').filter({ hasText: 'Sol Ring' })).toBeVisible();
   await expect(page.getByRole('row').filter({ hasText: 'Llanowar' })).toHaveCount(0);
   expect(misses).toEqual([]);
