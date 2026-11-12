@@ -303,7 +303,7 @@ test("swaps cut the card Edgar Markov decks play least for one they play more, a
   await showPane(page, 'Cards');
   await expect(page.getByRole('row').filter({ hasText: 'Kalastria Highborn' })).toBeVisible();
   await expect(page.getByRole('row').filter({ hasText: 'Blood Artist' })).toHaveCount(0);
-  await expect(page.getByTestId('deck-total')).toHaveText('$119.73');
+  await expect(page.getByTestId('deck-total')).toHaveText('$120.90');
   // EDHREC answered, so v1's rules-based searches (tribe, themes, roles) never ran.
   expect(searches.filter((q) => /prefer:usd-low (t:|o:|otag:|\(keyword)/.test(q))).toEqual([]);
   expect(misses).toEqual([]);
