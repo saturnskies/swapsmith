@@ -452,7 +452,6 @@ export function createLife(storage: Storage | null): Life {
           keep: 'Keep current game',
           yes: 'Replace it',
           onYes: () => {
-            if (me !== drawId) return;
             store.setup = { ...store.setup, players: picked.players, startingLife: picked.startingLife };
             store.game = newGame(store.setup);
             future = false;
