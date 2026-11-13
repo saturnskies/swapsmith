@@ -43,6 +43,8 @@ A bottom tab bar that keeps each tab's place, and a Life Counter that works on a
 
 ### Setup screen (`#/life`)
 
+> **Changed on 2026-11-13:** there is no setup screen or Resume game any more. `#/life` opens straight into the game (a default 2-player 40-life game when none is saved), and the choices below live in the game menu's **New game** and **Defaults** sheets. Reset life totals no longer asks first (an undo toast covers it). See [Life Counter art revamp](2026-11-13-life-counter-art.md), "Opening and defaults". The rest of this section is the original design.
+
 - **Players:** 1–6, segmented control (default 4). Names (default "Player N", max 24 characters) and a color per player. Names and colors are remembered for the next game.
 - **Starting life:** segmented control 20 · 30 · 40 · Custom (default 40); Custom shows a number input, whole numbers 1–999, invalid input keeps Start disabled with a message.
 - **Start game** goes to `#/life/game`. If a game is in progress the screen shows **Resume game** first and **New game** second (confirm in a dialog before it replaces the saved game).
