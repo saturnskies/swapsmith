@@ -44,7 +44,7 @@ export interface Game {
   first: number | null;
 }
 
-/** What the setup screen remembers for the next game. */
+/** The names and colors, and the last-used players and starting life, remembered for the next game. */
 export interface Setup {
   players: number;
   startingLife: number;
