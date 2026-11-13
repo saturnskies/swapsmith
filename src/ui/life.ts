@@ -39,7 +39,11 @@ const ROLL_STEP_MS = 100;
 
 export interface Life {
   hasGame(): boolean;
-  /** Makes sure there is a game to show: the saved one, else a new one from the saved defaults. Safe to call again and again. */
+  /**
+   * Makes sure there is a game to show: the saved one, else a new one from the saved defaults. Safe to call again and again.
+   * Under a save from a newer version a default game plays in memory only: `persist()` skips the write, so the newer save's
+   * bytes stay untouched until a New game replaces it.
+   */
   ensureGame(): void;
   /** Draws the game. Drawn once: the container stays mounted while another tab shows. */
   render(view: HTMLElement): void;
