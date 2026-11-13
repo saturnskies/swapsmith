@@ -227,6 +227,15 @@ test.describe('New game sheet', () => {
     expect((await stored(page)).game.players).toHaveLength(3);
   });
 
+  test('after Replace it, focus is on the Menu button, not lost with the removed sheet', async ({ page }) => {
+    await start(page);
+    await openSheet(page, 'New game');
+    await page.getByRole('dialog', { name: 'New game' }).getByRole('button', { name: 'Start' }).click();
+    await page.getByRole('button', { name: 'Replace it' }).click();
+    await expect(page.locator('.tile')).toHaveCount(2);
+    await expect(page.getByRole('button', { name: 'Game menu' })).toBeFocused();
+  });
+
   test('starts from the defaults, and changing it does not change them', async ({ page }) => {
     await start(page, { players: 5, life: 20 });
     await expect(page.locator('.tile')).toHaveCount(5);
