@@ -48,6 +48,7 @@ Status: **current** = in force or in progress; **draft** = proposed, not approve
 - [2026-11-04-browse-tab.md](superpowers/specs/2026-11-04-browse-tab.md) — current, 2026-11-04 — Browse tab spec — search every card by name, set, type, tribe, keyword, role, color identity, mana value, rarity and price (plus raw Scryfall syntax), image grid or list, sorting, Load more, and a card detail with Add to deck and Mark as owned
 - [2026-11-04-tab-bar-life-counter.md](superpowers/specs/2026-11-04-tab-bar-life-counter.md) — current, 2026-11-04 — Tab bar and Life Counter spec — bottom tabs (Decks, Browse, Life Counter) with hash routes and per-tab place, plus an offline 1–6 player life counter with commander damage, poison, undo, wake lock and a saved game
 - [2026-11-06-swap-from-card.md](superpowers/specs/2026-11-06-swap-from-card.md) — current, 2026-11-06 — Swap from a card design — tap a deck card, see similar cards from decks with the same commander that fit the deck's mechanics, with popularity and a plain comparison side by side, and swap in one tap
+- [2026-11-13-life-counter-art.md](superpowers/specs/2026-11-13-life-counter-art.md) — draft, 2026-11-13 — Life Counter art revamp spec — opens straight into a saved default 2-player 40-life game, card-art tiles from any Scryfall card (search, filters, random, cached offline), accent colours suggested from the art, pod profiles in deck backup, and a splatter-to-skull death effect
 
 ## tutorial/
 
