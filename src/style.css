@@ -430,9 +430,10 @@ body.in-game main.wrap { max-width: none; padding: 0; display: block; }
   z-index: 2;
 }
 .table-menu.corner { left: auto; top: max(10px, env(safe-area-inset-top, 0px)); right: max(10px, env(safe-area-inset-right, 0px)); transform: none; }
+.table:has(.table-menu.corner) .tile-head { padding-right: 4rem; } /* one player: the corner Menu button leaves the Counters button clear */
 .table-menu:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 /* The reset toast under the menu button, in the look of .toast. Empty, it is the 1px clipped box above. */
-.life-toast:not(:empty) { position: absolute; left: 50%; top: calc(50% + 2.75rem); transform: translateX(-50%); z-index: 3; width: max-content; }
+.life-toast:not(:empty) { position: absolute; left: 50%; top: calc(50% + 3.75rem); transform: translateX(-50%); z-index: 3; width: max-content; }
 
 /* Life Counter: counters, warnings and the per-player sheet. */
 .tile-head { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; width: 100%; min-width: 0; }
