@@ -228,7 +228,7 @@ describe('defaults', () => {
   it.each([
     ['players 0', { players: 0, startingLife: 30 }, { players: 2, startingLife: 30 }],
     ['players 7', { players: 7, startingLife: 30 }, { players: 2, startingLife: 30 }],
-    ['players a string', { players: '2', startingLife: 30 }, { players: 2, startingLife: 30 }],
+    ['players a string', { players: '4', startingLife: 30 }, { players: 2, startingLife: 30 }],
     ['players null', { players: null, startingLife: 30 }, { players: 2, startingLife: 30 }],
     ['players 2.6 (rounds to 3)', { players: 2.6, startingLife: 30 }, { players: 3, startingLife: 30 }],
     ['life 0 (clamps to 1)', { players: 4, startingLife: 0 }, { players: 4, startingLife: 1 }],
