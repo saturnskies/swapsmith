@@ -161,7 +161,7 @@ test('counters, partners and the undo history are saved with the game', async ({
   await expect(tile(page, 0).locator('.tile-badges')).not.toContainText('Commander');
 });
 
-const toast = (page: Page) => page.locator('.toast');
+const toast = (page: Page) => page.locator('.life-toast');
 const toastUndo = (page: Page) => toast(page).getByRole('button', { name: 'Undo' });
 const stored = (page: Page) => page.evaluate(() => JSON.parse(localStorage.getItem('swapsmith:life') ?? 'null'));
 const resetTotals = async (page: Page) => {
@@ -340,4 +340,85 @@ test('the empty toast slot stays in the accessibility tree as a 1px clipped box'
   expect(shown.position).toBe('absolute');
   expect(shown.w).toBeGreaterThan(1);
   expect(shown.h).toBeGreaterThan(1);
+});
+
+test('after the toast Undo is pressed, focus goes to the Menu button', async ({ page }) => {
+  await threePlayers(page);
+  await minus(page, 'Player 1').click();
+  await resetTotals(page);
+  await toastUndo(page).focus();
+  await page.keyboard.press('Enter');
+  await expect(life(page, 0)).toHaveText('39');
+  await expect(page.getByRole('button', { name: 'Game menu' })).toBeFocused();
+});
+
+test('when the toast times out with Undo focused, focus goes to the Menu button', async ({ page }) => {
+  await page.clock.install();
+  await threePlayers(page);
+  await resetTotals(page);
+  await toastUndo(page).focus();
+  await page.clock.fastForward(8500);
+  await expect(toast(page)).toHaveText('');
+  await expect(page.getByRole('button', { name: 'Game menu' })).toBeFocused();
+});
+
+test('when the toast times out and focus was elsewhere, focus is not moved', async ({ page }) => {
+  await page.clock.install();
+  await threePlayers(page);
+  await resetTotals(page);
+  await minus(page, 'Player 2').focus();
+  await page.clock.fastForward(8500);
+  await expect(toast(page)).toHaveText('');
+  await expect(minus(page, 'Player 2')).toBeFocused();
+});
+
+test('the partner toggle clears the reset toast', async ({ page }) => {
+  await threePlayers(page);
+  await resetTotals(page);
+  await expect(toast(page)).toContainText('Life totals reset');
+  const dlg = await openSheet(page, 'Player 1');
+  await dlg.getByLabel('Has a partner commander').check();
+  await expect(toast(page)).toHaveText('');
+});
+
+test('a color edit clears the reset toast', async ({ page }) => {
+  await threePlayers(page);
+  await resetTotals(page);
+  await expect(toast(page)).toContainText('Life totals reset');
+  await (await menu(page)).getByRole('button', { name: 'Edit names & colors' }).click();
+  const dlg = page.getByRole('dialog', { name: 'Edit players' });
+  await dlg.locator('.swatch[aria-pressed="false"]').first().click();
+  await expect(toast(page)).toHaveText('');
+});
+
+/** The toast must never cover a life total, a minus/plus button or a Counters button while it is up. */
+for (const players of [1, 2, 4]) {
+  for (const size of [
+    { width: 390, height: 844 },
+    { width: 360, height: 640 },
+  ]) {
+    test(`the reset toast covers no life total, life button or Counters button: ${players} player(s) at ${size.width}x${size.height}`, async ({ page }) => {
+      await page.setViewportSize(size);
+      await start(page, { players });
+      await resetTotals(page);
+      await expect(toast(page)).toContainText('Life totals reset');
+      await page.screenshot({ path: `${process.env.SHOTS ?? '/tmp'}/toast-${players}p-${size.width}x${size.height}.png` });
+      const t = (await toast(page).boundingBox())!;
+      const targets = await page.locator('.life-btn, .tile-life, .tile-counters').evaluateAll((els) => els.map((el) => { const r = el.getBoundingClientRect(); return { cls: el.className, x: r.x, y: r.y, w: r.width, h: r.height }; }));
+      expect(targets.length).toBeGreaterThan(0);
+      for (const r of targets) {
+        const overlap = t.x < r.x + r.w && r.x < t.x + t.width && t.y < r.y + r.h && r.y < t.y + t.height;
+        expect(overlap, `toast ${JSON.stringify(t)} covers ${JSON.stringify(r)}`).toBe(false);
+      }
+    });
+  }
+}
+
+test('with one player the Menu button does not cover the Counters button', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  await start(page, { players: 1 });
+  const m = (await page.getByRole('button', { name: 'Game menu' }).boundingBox())!;
+  const c = (await page.locator('.tile-counters').boundingBox())!;
+  const overlap = m.x < c.x + c.width && c.x < m.x + m.width && m.y < c.y + c.height && c.y < m.y + m.height;
+  expect(overlap, `menu ${JSON.stringify(m)} covers ${JSON.stringify(c)}`).toBe(false);
 });
