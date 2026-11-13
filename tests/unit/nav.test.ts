@@ -44,7 +44,7 @@ describe('backTarget', () => {
 });
 
 describe('lifeRoute', () => {
-  it.each(['#/life', '#/life/game', '#/life/anything', '#/life/game/extra'])('sends %s to the game', (route) => {
-    expect(lifeRoute(route)).toBe('#/life/game');
+  it('is the game: the Life Counter has no other screen', () => {
+    expect(lifeRoute()).toBe('#/life/game');
   });
 });
