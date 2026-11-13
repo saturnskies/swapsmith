@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { life, menu, minus, plus, start } from './life-helpers';
 
 test.beforeEach(async ({ page }) => {
@@ -12,6 +12,15 @@ const openSheet = async (page: Page, action: 'New game' | 'Defaults') => {
   return page.getByRole('dialog', { name: action });
 };
 const SAVE = 'Save defaults';
+
+/** An empty live region stays in the accessibility tree: a 1px clipped box taken out of the layout, never display:none. */
+const liveBox = (el: Locator) =>
+  el.evaluate((node) => {
+    const cs = getComputedStyle(node);
+    const r = node.getBoundingClientRect();
+    return { text: node.textContent, role: node.getAttribute('role'), display: cs.display, position: cs.position, w: r.width, h: r.height };
+  });
+const clippedStatus = { text: '', role: 'status', display: expect.not.stringMatching(/^none$/), position: 'absolute', w: 1, h: 1 };
 
 test.describe('opening', () => {
   test('a fresh profile opens straight into a 2-player, 40-life game, full screen, with no setup step', async ({ page }) => {
@@ -100,6 +109,14 @@ test.describe('opening', () => {
 });
 
 test.describe('Defaults sheet', () => {
+  test('its empty notice stays in the accessibility tree as a 1px clipped box', async ({ page }) => {
+    await start(page);
+    const dlg = await openSheet(page, 'Defaults');
+    const notice = dlg.locator('.notice');
+    await expect(notice).toHaveCount(1);
+    expect(await liveBox(notice)).toEqual(clippedStatus);
+  });
+
   test('saved players and starting life apply to the next New game and leave the game in progress alone', async ({ page }) => {
     await start(page);
     await minus(page, 'Player 1').click();
@@ -179,6 +196,14 @@ test.describe('Defaults sheet', () => {
 });
 
 test.describe('New game sheet', () => {
+  test('its empty notice stays in the accessibility tree as a 1px clipped box', async ({ page }) => {
+    await start(page);
+    const dlg = await openSheet(page, 'New game');
+    const notice = dlg.locator('.notice');
+    await expect(notice).toHaveCount(1);
+    expect(await liveBox(notice)).toEqual(clippedStatus);
+  });
+
   test('asks before replacing: Keep current game leaves it, Replace it starts a fresh one from the form', async ({ page }) => {
     await start(page);
     await minus(page, 'Player 1').click();
