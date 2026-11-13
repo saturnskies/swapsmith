@@ -1,6 +1,6 @@
 ---
 description: Plan for Life Counter slice 1 — the tab opens straight into a saved default 2-player 40-life game, New game and Defaults sheets replace the setup screen, reset needs no confirm (with an undo toast), face-to-face 2-player layout checked; four test-gated tasks
-status: draft
+status: done
 updated: 2026-11-13
 ---
 
@@ -136,3 +136,7 @@ Correctness of the saved-store round trip (old stores, newer-version stores, blo
 - A way back to the other tabs from the game without opening the menu (the bar stays hidden for now).
 - Defaults remembering a profile per seat (after slice 3).
 - Deck-style backup of the Life Counter store (already a follow-up in the 2026-11-04 spec).
+- Leave game and Android back go to `#/`, not to the deck screen Decks last showed, so a deck left open loses its place (decision 3). Consider returning to `last.decks`.
+- The spec's "Make current setup the default" is built as "Use this game's setup", which fills the Defaults form and still needs Save defaults.
+- At 4 players on 360×640 the Menu button's edge overlaps the top-right corner of Player 1's Counters button (also at the base commit). Same padding trick as the 1-player corner menu, plus a test.
+- `Setup.players` and `Setup.startingLife` are still written by New game but no longer read; drop them when slice 3 touches the store.
