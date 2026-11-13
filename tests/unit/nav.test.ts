@@ -28,8 +28,9 @@ describe('backTarget', () => {
     expect(backTarget('#/')).toBeNull();
   });
 
-  it('goes from the game to the Life Counter setup, then to Your decks', () => {
-    expect(backTarget('#/life/game')).toBe('#/life');
+  it('goes from the Life Counter game straight to Your decks', () => {
+    expect(backTarget('/life/game')).toBe('#/');
+    expect(backTarget('#/life/game')).toBe('#/');
     expect(backTarget('#/life')).toBe('#/');
   });
 
@@ -43,15 +44,7 @@ describe('backTarget', () => {
 });
 
 describe('lifeRoute', () => {
-  it('keeps the setup route, and sends unknown sub-routes there', () => {
-    expect(lifeRoute('#/life')).toBe('#/life');
-    expect(lifeRoute('#/life/x')).toBe('#/life');
-    expect(lifeRoute('#/life/game/extra')).toBe('#/life');
-  });
-
-  it('keeps the game route only when a game exists', () => {
-    expect(lifeRoute('#/life/game', true)).toBe('#/life/game');
-    expect(lifeRoute('#/life/game', false)).toBe('#/life');
-    expect(lifeRoute('#/life/game')).toBe('#/life');
+  it.each(['#/life', '#/life/game', '#/life/anything', '#/life/game/extra'])('sends %s to the game', (route) => {
+    expect(lifeRoute(route)).toBe('#/life/game');
   });
 });

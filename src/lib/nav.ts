@@ -15,10 +15,10 @@ export function tabOf(route: string): Tab {
 export function backTarget(route: string): string | null {
   const r = bare(route);
   if (r === '/') return null;
-  return r === '/life/game' ? '#/life' : '#/';
+  return '#/';
 }
 
-/** The Life Counter route to show for `route`: only setup and (with a saved game) the game exist. */
-export function lifeRoute(route: string, hasGame = false): string {
-  return bare(route) === '/life/game' && hasGame ? '#/life/game' : '#/life';
+/** The Life Counter route to show for `route`: the game is its only screen, so every Life Counter route lands there. */
+export function lifeRoute(_route: string): string {
+  return '#/life/game';
 }
