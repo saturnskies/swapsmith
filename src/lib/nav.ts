@@ -18,7 +18,7 @@ export function backTarget(route: string): string | null {
   return '#/';
 }
 
-/** The Life Counter route to show for `route`: the game is its only screen, so every Life Counter route lands there. */
-export function lifeRoute(_route: string): string {
+/** The one Life Counter route: the game is its only screen, so every Life Counter route is sent here. */
+export function lifeRoute(): string {
   return '#/life/game';
 }
