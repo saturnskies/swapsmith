@@ -3,6 +3,7 @@ import { SCRIM_ALPHA, artQuery, artRefOf, dominantColors, planEviction, readable
 import { contrastWithWhite } from '../../src/lib/life';
 import { MAX_QUERY, quote } from '../../src/lib/browse';
 import type { ScryCard } from '../../src/scryfall/types';
+import artFixture from '../fixtures/scryfall-art.json';
 
 const card = (over: Partial<ScryCard> = {}): ScryCard =>
   ({
@@ -36,6 +37,26 @@ describe('artRefOf', () => {
   it('uses the first face when the card has no top-level image', () => {
     const c = card({ image_uris: undefined, card_faces: [{ name: 'Front', image_uris: { art_crop: 'https://cards.scryfall.io/f.jpg' } }, { name: 'Back', image_uris: { art_crop: 'https://cards.scryfall.io/b.jpg' } }] });
     expect(artRefOf(c)?.url).toBe('https://cards.scryfall.io/f.jpg');
+  });
+
+  it('reads the illustration id (and artist) from the first face when the card has none of its own', () => {
+    const c = card({ illustration_id: undefined, artist: undefined, image_uris: undefined, card_faces: [{ name: 'Front', illustration_id: 'face-illus', artist: 'Face Artist', image_uris: { art_crop: 'https://cards.scryfall.io/f.jpg' } }, { name: 'Back', illustration_id: 'back-illus', image_uris: { art_crop: 'https://cards.scryfall.io/b.jpg' } }] });
+    expect(artRefOf(c)).toEqual({ id: 'face-illus', cardId: 'card-1', name: 'Edgar Markov', artist: 'Face Artist', url: 'https://cards.scryfall.io/f.jpg' });
+  });
+
+  it('builds references from the real two-faced and one-faced cards Scryfall answered (recorded 2026-11-13)', () => {
+    const list = (artFixture as unknown as Record<string, { body: { data: ScryCard[] } }>)['GET /cards/search?q=name%3A%22delver%22+is%3Ahighres&unique=art&order=released&page=1'].body.data;
+    const twoFaced = list.filter((c) => !c.illustration_id && c.card_faces);
+    expect(twoFaced.length).toBeGreaterThan(0);
+    for (const c of twoFaced) {
+      const ref = artRefOf(c);
+      expect(ref, c.name).not.toBeNull();
+      expect(ref!.id).toBe(c.card_faces![0].illustration_id);
+      expect(ref!.url).toBe(c.card_faces![0].image_uris!.art_crop);
+    }
+    // Lost Mine of Phandelver has no artist at all: still rejected.
+    expect(artRefOf(list.find((c) => c.name === 'Lost Mine of Phandelver')!)).toBeNull();
+    expect(list.map(artRefOf).filter(Boolean)).toHaveLength(list.length - 1);
   });
 
   it('is null without an illustration id, an artist or a crop', () => {
