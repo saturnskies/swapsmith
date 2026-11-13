@@ -140,7 +140,6 @@ test.describe('roll for first player', () => {
 
     const dlg = await menu(page);
     await dlg.getByRole('button', { name: 'Reset life totals' }).click();
-    await page.getByRole('dialog', { name: 'Reset all life totals?' }).getByRole('button', { name: 'Reset' }).click();
     await expect(page.locator('.tile[data-first="true"]')).toHaveCount(0);
   });
 
