@@ -78,3 +78,19 @@ export function trim(body: unknown, opts: { allLegalities?: boolean; compareFiel
   if (prices) out.prices = { usd: prices.usd, usd_foil: prices.usd_foil, usd_etched: prices.usd_etched };
   return out;
 }
+
+/** Keeps only the card fields the art picker reads (the art_crop link, never the other image sizes), in the same shape. */
+export function trimArt(body: unknown): unknown {
+  if (!body || typeof body !== 'object') return body;
+  const b = body as Record<string, any>;
+  if (b.object === 'list') return { ...b, data: (b.data as unknown[]).map(trimArt) };
+  if (b.object !== 'card') return b;
+  const crop = (u: any) => (u?.art_crop ? { art_crop: u.art_crop } : undefined);
+  const out: Record<string, unknown> = {};
+  for (const k of ['object', 'id', 'oracle_id', 'name', 'layout', 'artist', 'illustration_id', 'image_status']) if (k in b) out[k] = b[k];
+  if (b.image_uris) out.image_uris = crop(b.image_uris);
+  if (Array.isArray(b.card_faces)) {
+    out.card_faces = b.card_faces.map((f: Record<string, any>) => ({ name: f.name, artist: f.artist, illustration_id: f.illustration_id, ...(f.image_uris ? { image_uris: crop(f.image_uris) } : {}) }));
+  }
+  return out;
+}
