@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { begin, life, start } from './life-helpers';
+import { life, start } from './life-helpers';
 
 test.beforeEach(async ({ page }) => {
   await page.route('https://api.scryfall.com/**', (route) => route.abort());
@@ -16,6 +16,22 @@ const menu = async (page: Page) => {
 const leave = async (page: Page) => {
   await (await menu(page)).getByRole('link', { name: 'Leave game' }).click();
 };
+/** Opens Menu → Edit names & colors; the names and colors are set here now, not before the game. */
+const editPlayers = async (page: Page) => {
+  await (await menu(page)).getByRole('button', { name: 'Edit names & colors' }).click();
+  return page.getByRole('dialog', { name: 'Edit players' });
+};
+/** The edit dialog opens over the menu, so closing it leaves the menu to close too. */
+const closeEditing = async (page: Page) => {
+  await page.getByRole('dialog', { name: 'Edit players' }).getByRole('button', { name: 'Close' }).click();
+  await page.getByRole('dialog', { name: 'Game menu' }).getByRole('button', { name: 'Close' }).click();
+};
+const newGame = async (page: Page) => {
+  await (await menu(page)).getByRole('button', { name: 'New game' }).click();
+  await page.getByRole('dialog', { name: 'New game' }).getByRole('button', { name: 'Start' }).click();
+  await page.getByRole('button', { name: 'Replace it' }).click();
+  await expect(page.getByRole('dialog', { name: 'New game' })).toBeHidden();
+};
 
 /** Makes the roll land on a chosen number: the game draws one 32-bit number per roll. */
 const fixRandom = (page: Page, n: number) =>
@@ -27,13 +43,14 @@ const fixRandom = (page: Page, n: number) =>
   }, n);
 
 test.describe('names and colors', () => {
-  test('are chosen in the setup, and used on the tiles and in the button names', async ({ page }) => {
-    await start(page, { players: 2 });
+  test('are chosen in the edit dialog, and used on the tiles and in the button names', async ({ page }) => {
+    await start(page);
+    await editPlayers(page);
     await nameField(page, 1).fill('Alex');
     await swatch(page, 2, 'Blue').click();
     await expect(swatch(page, 2, 'Blue')).toHaveAttribute('aria-pressed', 'true');
     await expect(swatch(page, 2, 'Green')).toHaveAttribute('aria-pressed', 'false');
-    await begin(page);
+    await closeEditing(page);
 
     await expect(tile(page, 0).locator('.tile-name')).toHaveText('Alex');
     await expect(page.getByRole('button', { name: 'Alex: lose 1 life' })).toBeVisible();
@@ -45,26 +62,31 @@ test.describe('names and colors', () => {
 
   test('a name is cut to 24 characters', async ({ page }) => {
     await start(page, { players: 1 });
+    await editPlayers(page);
     await nameField(page, 1).fill('x'.repeat(40));
-    await begin(page);
+    await closeEditing(page);
     await expect(tile(page, 0).locator('.tile-name')).toHaveText('x'.repeat(24));
   });
 
   test('are remembered for the next game', async ({ page }) => {
-    await start(page, { players: 3 });
+    // A new game starts from the saved defaults (2 players), with each seat's name and color from the last edit.
+    await start(page);
+    await editPlayers(page);
     await nameField(page, 2).fill('Blake');
-    await swatch(page, 3, 'Teal').click();
-    await begin(page);
-    await leave(page);
+    await swatch(page, 2, 'Teal').click();
+    await closeEditing(page);
+    await newGame(page);
+    await expect(tile(page, 1).locator('.tile-name')).toHaveText('Blake');
+    expect(await bg(page, 1)).toBe('rgb(0, 105, 92)');
+    await expect(tile(page, 0).locator('.tile-name')).toHaveText('Player 1');
+
     await page.reload();
-    await expect(nameField(page, 2)).toHaveValue('Blake');
-    await expect(swatch(page, 3, 'Teal')).toHaveAttribute('aria-pressed', 'true');
-    await expect(nameField(page, 1)).toHaveValue('');
+    await expect(tile(page, 1).locator('.tile-name')).toHaveText('Blake');
+    expect(await bg(page, 1)).toBe('rgb(0, 105, 92)');
   });
 
   test('can be edited during the game, and everything that shows a name follows', async ({ page }) => {
     await start(page, { players: 3 });
-    await begin(page);
     const dlg = await menu(page);
     await dlg.getByRole('button', { name: 'Edit names & colors' }).click();
     const edit = page.getByRole('dialog', { name: 'Edit players' });
@@ -88,8 +110,9 @@ test.describe('names and colors', () => {
 
   test('a renamed opponent shows under their new name in the commander damage rows', async ({ page }) => {
     await start(page, { players: 2 });
+    await editPlayers(page);
     await nameField(page, 2).fill('Blake');
-    await begin(page);
+    await closeEditing(page);
     await page.getByRole('button', { name: 'Player 1: poison and commander damage' }).click();
     await expect(page.getByRole('group', { name: 'Damage from Blake', exact: true })).toBeVisible();
   });
@@ -99,7 +122,6 @@ test.describe('roll for first player', () => {
   test('picks a player at random, marks them, and keeps the mark through a reload', async ({ page }) => {
     await fixRandom(page, 2);
     await start(page, { players: 3 });
-    await begin(page);
     await expect(page.locator('.tile[data-first="true"]')).toHaveCount(0);
     await (await menu(page)).getByRole('button', { name: 'Roll for first player' }).click();
     await expect(tile(page, 2)).toHaveAttribute('data-first', 'true');
@@ -113,7 +135,6 @@ test.describe('roll for first player', () => {
   test('rolls again for a different player, and a reset clears the mark', async ({ page }) => {
     await fixRandom(page, 0);
     await start(page, { players: 3 });
-    await begin(page);
     await (await menu(page)).getByRole('button', { name: 'Roll for first player' }).click();
     await expect(tile(page, 0)).toHaveAttribute('data-first', 'true');
 
@@ -126,7 +147,6 @@ test.describe('roll for first player', () => {
   test('shows the roll moving between tiles, unless reduced motion is asked for', async ({ page }) => {
     await fixRandom(page, 1);
     await start(page, { players: 3 });
-    await begin(page);
     await (await menu(page)).getByRole('button', { name: 'Roll for first player' }).click();
     await expect(page.locator('.tile.rolling')).toHaveCount(1);
     await expect(tile(page, 1)).toHaveAttribute('data-first', 'true');
@@ -136,31 +156,31 @@ test.describe('roll for first player', () => {
   test('the menu stays shut while the roll runs, so nothing can reset or undo mid-roll', async ({ page }) => {
     await fixRandom(page, 5);
     await start(page, { players: 6 });
-    await begin(page);
     await (await menu(page)).getByRole('button', { name: 'Roll for first player' }).click();
     await expect(page.getByRole('button', { name: 'Game menu' })).toBeDisabled();
     await expect(tile(page, 5)).toHaveAttribute('data-first', 'true');
     await expect(page.getByRole('button', { name: 'Game menu' })).toBeEnabled();
   });
 
-  test('a roll still running when the game is left does not mark anyone in the next draw of the game', async ({ page }) => {
+  test('a roll still running when you visit another tab finishes once: one player marked and saved, none doubled on return', async ({ page }) => {
     await fixRandom(page, 5);
     await start(page, { players: 6 });
-    await begin(page);
     await (await menu(page)).getByRole('button', { name: 'Roll for first player' }).click();
     await expect(page.locator('.tile.rolling')).toHaveCount(1);
-    await page.evaluate(() => (location.hash = '#/life'));
-    await page.evaluate(() => (location.hash = '#/life/game'));
+    await page.evaluate(() => (location.hash = '#/'));
     await page.waitForTimeout(2600);
-    await expect(page.locator('.tile[data-first="true"]')).toHaveCount(0);
-    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('swapsmith:life')!).game.first)).toBeNull();
+    await page.evaluate(() => (location.hash = '#/life'));
+    await expect(page).toHaveURL(/#\/life\/game$/);
+    await expect(page.locator('.tile[data-first="true"]')).toHaveCount(1);
+    await expect(tile(page, 5)).toHaveAttribute('data-first', 'true');
+    await expect(page.locator('.tile.rolling')).toHaveCount(0);
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('swapsmith:life')!).game.first)).toBe(5);
   });
 
   test('with reduced motion the answer is shown at once, with no animation', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await fixRandom(page, 1);
     await start(page, { players: 3 });
-    await begin(page);
     await page.evaluate(() => {
       (window as unknown as { seen: number }).seen = 0;
       new MutationObserver(() => {
@@ -175,7 +195,6 @@ test.describe('roll for first player', () => {
 
   test('with one player there is nothing to roll, and they go first at once', async ({ page }) => {
     await start(page, { players: 1 });
-    await begin(page);
     await (await menu(page)).getByRole('button', { name: 'Roll for first player' }).click();
     await expect(tile(page, 0)).toHaveAttribute('data-first', 'true', { timeout: 400 });
   });
@@ -209,9 +228,9 @@ const wl = (page: Page) => page.evaluate(() => (window as unknown as { wl: { req
 test.describe('keep the screen awake', () => {
   test('asks for the lock when the game opens and lets go when you leave it', async ({ page }) => {
     await stubWakeLock(page, 'works');
-    await start(page, { players: 2 });
+    await page.goto('./');
     expect((await wl(page)).requests).toBe(0);
-    await begin(page);
+    await start(page);
     await expect.poll(async () => (await wl(page)).requests).toBe(1);
     await leave(page);
     await expect.poll(async () => (await wl(page)).released).toBe(1);
@@ -219,8 +238,7 @@ test.describe('keep the screen awake', () => {
 
   test('lets go when you leave by another route, and asks again when you come back to the game', async ({ page }) => {
     await stubWakeLock(page, 'works');
-    await start(page, { players: 2 });
-    await begin(page);
+    await start(page);
     await expect.poll(async () => (await wl(page)).requests).toBe(1);
     await page.evaluate(() => (location.hash = '#/browse'));
     await expect.poll(async () => (await wl(page)).released).toBe(1);
@@ -230,8 +248,7 @@ test.describe('keep the screen awake', () => {
 
   test('asks again after the system drops the lock, and never holds two', async ({ page }) => {
     await stubWakeLock(page, 'works');
-    await start(page, { players: 2 });
-    await begin(page);
+    await start(page);
     await expect.poll(async () => (await wl(page)).requests).toBe(1);
 
     // Coming back to the page while a lock is held asks for nothing more.
@@ -248,8 +265,7 @@ test.describe('keep the screen awake', () => {
   for (const mode of ['rejects', 'missing'] as const) {
     test(`says the screen may turn off when the lock is ${mode === 'rejects' ? 'refused' : 'not available'}, and the game still works`, async ({ page }) => {
       await stubWakeLock(page, mode);
-      await start(page, { players: 2 });
-      await begin(page);
+      await start(page);
       await page.getByRole('button', { name: 'Player 1: lose 1 life' }).click();
       await expect(life(page, 0)).toHaveText('39');
       const dlg = await menu(page);
@@ -259,8 +275,7 @@ test.describe('keep the screen awake', () => {
 
   test('says nothing when the lock is held', async ({ page }) => {
     await stubWakeLock(page, 'works');
-    await start(page, { players: 2 });
-    await begin(page);
+    await start(page);
     await expect.poll(async () => (await wl(page)).requests).toBe(1);
     const dlg = await menu(page);
     await expect(dlg.getByText('Your screen may turn off')).toHaveCount(0);
