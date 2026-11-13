@@ -23,6 +23,7 @@ import {
   undo,
   warnings,
   type Defaults,
+  type Game,
   type Target,
 } from '../lib/life';
 import { segmented } from './controls';
@@ -36,6 +37,8 @@ const UNSAVED = "Your browser is blocking storage, so this game won't be saved i
 const AWAKE_MSG = 'Your screen may turn off during the game.';
 /** The roll highlights a tile every this many ms, around the table twice and on to the winner. */
 const ROLL_STEP_MS = 100;
+/** The "Life totals reset" toast, with its Undo, stays this long (ms). */
+const TOAST_MS = 8000;
 
 export interface Life {
   hasGame(): boolean;
@@ -230,6 +233,21 @@ export function createLife(storage: Storage | null): Life {
     awakeNotes = [];
     const parts = new Map<number, { life: HTMLElement; badges: HTMLElement; warn: HTMLElement; el: HTMLElement; name: HTMLElement; counters: HTMLElement; minus: HTMLElement; plus: HTMLElement }>();
 
+    /**
+     * The reset toast: a copy of the game from before the reset, kept in memory only, and the slot that offers it back. Any
+     * other change to the game, a new game or a redraw drops it. The slot stays in the page, empty, so it is a live region
+     * the moment text lands in it.
+     */
+    let resetSnapshot: Game | null = null;
+    let toastTimer = 0;
+    const toast = h('div', { class: 'toast life-toast', role: 'status' });
+    const clearToast = () => {
+      window.clearTimeout(toastTimer);
+      toastTimer = 0;
+      resetSnapshot = null;
+      toast.replaceChildren();
+    };
+
     /** Redraws everything a seat's tile shows from the saved game. */
     const updateTile = (seat: number) => {
       const g = store.game!;
@@ -252,6 +270,7 @@ export function createLife(storage: Storage | null): Life {
 
     /** One change by one player, saved, with that player's tile redrawn. Returns the counter's new value. */
     const adjust = (seat: number, target: Target, delta: number) => {
+      clearToast();
       store.game = applyChange(store.game!, seat, target, delta);
       updateTile(seat);
       persist();
@@ -306,6 +325,7 @@ export function createLife(storage: Storage | null): Life {
       const partner = h('input', { type: 'checkbox' }) as HTMLInputElement;
       partner.checked = me.partners;
       partner.addEventListener('change', () => {
+        clearToast();
         store.game = setPartners(store.game!, seat, partner.checked);
         updateAll();
         persist();
@@ -338,27 +358,36 @@ export function createLife(storage: Storage | null): Life {
     const undoBtn = h('button', { type: 'button', class: 'button' }, 'Undo') as HTMLButtonElement;
     const refreshUndo = () => (undoBtn.disabled = store.game!.history.length === 0);
     undoBtn.addEventListener('click', () => {
+      clearToast();
       store.game = undo(store.game!);
       updateAll();
       refreshUndo();
       persist();
     });
     const reset = h('button', { type: 'button', class: 'button danger' }, 'Reset life totals');
-    reset.addEventListener('click', () =>
-      confirmDialog(view, {
-        id: 'reset-h',
-        title: 'Reset all life totals?',
-        text: 'Life goes back to the starting total, poison and commander damage clear, and Undo is emptied.',
-        keep: 'Keep playing',
-        yes: 'Reset',
-        onYes: () => {
-          store.game = resetGame(store.game!);
-          updateAll();
-          refreshUndo();
-          persist();
-        },
-      }),
-    );
+    reset.addEventListener('click', () => {
+      clearToast();
+      resetSnapshot = structuredClone(store.game!);
+      store.game = resetGame(store.game!);
+      updateAll();
+      refreshUndo();
+      persist();
+      menu.close();
+      const undoReset = h('button', { type: 'button', class: 'button' }, 'Undo');
+      undoReset.addEventListener('click', () => {
+        const snapshot = resetSnapshot;
+        if (!snapshot) return;
+        clearToast();
+        store.game = snapshot;
+        updateAll();
+        refreshUndo();
+        persist();
+      });
+      toast.replaceChildren(h('span', {}, 'Life totals reset'), undoReset);
+      toastTimer = window.setTimeout(() => {
+        if (me === drawId) clearToast();
+      }, TOAST_MS);
+    });
     const edit = h('button', { type: 'button', class: 'button' }, 'Edit names & colors');
     edit.addEventListener('click', () => {
       const closeEdit = h('button', { type: 'button', class: 'button' }, 'Close');
@@ -371,12 +400,14 @@ export function createLife(storage: Storage | null): Life {
           name: (i) => store.game!.players[i].name,
           color: (i) => store.game!.players[i].color,
           onName: (i, v) => {
+            clearToast();
             store.game = setName(store.game!, i, v);
             remember(i, { name: v });
             updateAll();
             persist();
           },
           onColor: (i, c) => {
+            clearToast();
             store.game = setColor(store.game!, i, c);
             remember(i, { color: c });
             updateAll();
@@ -396,6 +427,7 @@ export function createLife(storage: Storage | null): Life {
     rollBtn.addEventListener('click', () => {
       if (rolling) return;
       rolling = true;
+      clearToast();
       open.disabled = true;
       menu.close();
       const seat = randomSeat(seats.length);
@@ -518,7 +550,7 @@ export function createLife(storage: Storage | null): Life {
     });
 
     view.replaceChildren(
-      h('section', { class: 'table', 'aria-label': 'Life totals' }, top.length ? h('div', { class: 'table-row top' }, ...top.map((s) => tile(s, true))) : null, h('div', { class: 'table-row bottom' }, ...bottom.map((s) => tile(s, false))), open, menu),
+      h('section', { class: 'table', 'aria-label': 'Life totals' }, top.length ? h('div', { class: 'table-row top' }, ...top.map((s) => tile(s, true))) : null, h('div', { class: 'table-row bottom' }, ...bottom.map((s) => tile(s, false))), open, toast, menu),
     );
     updateAll();
   }
