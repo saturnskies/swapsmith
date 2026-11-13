@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { composite, contrastRatio, effectiveBackground, parseColor } from '../support/contrast';
+import { start } from './life-helpers';
 import { openEdgarDeck, paneBar, row, seedEdgarDeck, showPane, suggestionsPanel } from './helpers';
 
 // Phone layout fixes (docs/superpowers/plans/2026-11-04-phone-layout.md). These check what the page
@@ -417,3 +418,50 @@ test('the browser bar colour follows the colour scheme', async ({ page }) => {
   expect(find('light')?.content).toBe('#ffffff');
   expect(find('dark')?.content).toBe('#242424');
 });
+
+// Life Counter, two players face to face (docs/superpowers/plans/2026-11-13-life-counter-slice-1.md, Task 4).
+for (const size of [
+  { width: 390, height: 844 },
+  { width: 360, height: 640 },
+]) {
+  test(`life counter ${size.width}x${size.height}: the default game is two tall tiles, the top one upside down, nothing clipped`, async ({ page }) => {
+    await page.setViewportSize(size);
+    await start(page);
+    const tiles = page.locator('.tile');
+    await expect(tiles).toHaveCount(2);
+    await expect(page.locator('.table-row.top .tile')).toHaveAttribute('data-player', '1');
+    await expect(page.locator('.table-row.top .tile-inner')).toHaveCSS('transform', /matrix\(-1, ?[^,]*, ?[^,]*, ?-1/);
+    await expect(page.locator('.table-row.bottom .tile')).toHaveAttribute('data-player', '0');
+    const boxes = await tiles.evaluateAll((els) =>
+      els.map((el) => {
+        const t = el.getBoundingClientRect();
+        const inner = [el.querySelector('.tile-life'), ...el.querySelectorAll('.life-btn')].map((x) => {
+          const r = x!.getBoundingClientRect();
+          return { top: r.top, bottom: r.bottom, left: r.left, right: r.right, h: r.height };
+        });
+        return { top: t.top, bottom: t.bottom, left: t.left, right: t.right, h: t.height, inner };
+      }),
+    );
+    const vh = size.height;
+    for (const b of boxes) {
+      expect(b.h, 'tile height').toBeGreaterThanOrEqual(vh * 0.4);
+      expect(b.inner).toHaveLength(3);
+      for (const r of b.inner) {
+        expect(r.h, 'life number and buttons are at least 44px tall').toBeGreaterThanOrEqual(44);
+        expect(r.top).toBeGreaterThanOrEqual(b.top - 0.5);
+        expect(r.bottom).toBeLessThanOrEqual(b.bottom + 0.5);
+        expect(r.left).toBeGreaterThanOrEqual(b.left - 0.5);
+        expect(r.right).toBeLessThanOrEqual(b.right + 0.5);
+      }
+    }
+    // The menu button sits in the middle, between the tiles, and is reachable.
+    const menu = page.getByRole('button', { name: 'Game menu' });
+    const m = (await menu.boundingBox())!;
+    const [topTile, bottomTile] = boxes.map((b) => b).sort((a, b) => a.top - b.top);
+    expect(Math.abs(m.x + m.width / 2 - size.width / 2)).toBeLessThan(2);
+    expect(m.y + m.height / 2).toBeGreaterThan(topTile.bottom - 2);
+    expect(m.y + m.height / 2).toBeLessThan(bottomTile.top + 2);
+    await menu.click();
+    await expect(page.getByRole('dialog', { name: 'Game menu' })).toBeVisible();
+  });
+}
