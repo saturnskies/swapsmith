@@ -27,7 +27,7 @@ A Life Counter that opens ready to play and looks like a card table: each seat s
 ### Art (slice 2)
 
 - Any seat can use the art crop of any Scryfall card printing.
-- **Picker:** name (or artist) search with a grid of art crops; filters for colour, card type and legendary only; tap a card to choose among its printings' art.
+- **Picker:** name (or artist) search with a grid of art crops; filters for colour, card type and legendary only. The grid lists each distinct artwork once (`unique=art`), so reprints with different art are already separate cells and no second "printings" step is needed (decided in the [slice 2 plan](../plans/2026-11-13-life-counter-slice-2.md)).
 - **Random:** a dice button that applies a random card's art straight away. No filters, no confirm.
 - **Offline:** the chosen image is cached in IndexedDB at pick time, so profiles and games render with no signal. Tile falls back to the accent colour if the image is missing.
 - **Tile:** art full-bleed behind everything with a dark scrim, big life number on top, accent colour on border, buttons and glow. Contrast must stay AA over any art.
