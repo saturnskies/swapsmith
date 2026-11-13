@@ -6,7 +6,7 @@ export const MAX_NAME = 24;
 export const LIFE_LIMIT = 9999;
 export const LIFE_PRESETS = [20, 30, 40] as const;
 export const DEFAULT_LIFE = 40;
-export const DEFAULT_PLAYERS = 4;
+export const DEFAULT_PLAYERS = 2;
 
 export const POISON_LETHAL = 10;
 export const CMDR_LETHAL = 21;
@@ -54,10 +54,17 @@ export interface Setup {
   colors: number[];
 }
 
+/** The player count and starting life a new game opens with (the Life Counter's saved default). */
+export interface Defaults {
+  players: number;
+  startingLife: number;
+}
+
 export interface LifeStore {
   version: 1;
   game: Game | null;
   setup: Setup;
+  defaults: Defaults;
 }
 
 /** Tile colors: each keeps white text at 4.5:1 or better (checked in tests). */
@@ -87,7 +94,7 @@ export function defaultSetup(): Setup {
 }
 
 export function emptyLife(): LifeStore {
-  return { version: 1, game: null, setup: defaultSetup() };
+  return { version: 1, game: null, setup: defaultSetup(), defaults: { players: DEFAULT_PLAYERS, startingLife: DEFAULT_LIFE } };
 }
 
 /** A typed custom starting life: whole numbers 1–999 only, else null. */
@@ -115,6 +122,12 @@ export function newGame(setup: Setup): Game {
     history: [],
     first: null,
   };
+}
+
+/** The game the Life Counter opens into: the saved defaults for players and life, with names and colors from `store.setup` by seat. */
+export function gameFromDefaults(store: LifeStore): Game {
+  const d = store.defaults;
+  return newGame({ ...store.setup, players: d.players, startingLife: d.startingLife });
 }
 
 const key = (from: number, slot: number) => `${from}:${slot}`;
@@ -301,12 +314,22 @@ function sanitizeGame(raw: unknown): Game | null {
   return game;
 }
 
+/** A player count 1–6 (rounded), else the default. */
+function sanitizePlayers(x: unknown): number {
+  const n = whole(x, 0, 1000);
+  return n != null && n >= 1 && n <= MAX_PLAYERS ? n : DEFAULT_PLAYERS;
+}
+
+function sanitizeDefaults(raw: unknown): Defaults {
+  const r = isObject(raw) ? raw : {};
+  return { players: sanitizePlayers(r.players), startingLife: whole(r.startingLife, 1, 999) ?? DEFAULT_LIFE };
+}
+
 function sanitizeSetup(raw: unknown): Setup {
   const r = isObject(raw) ? raw : {};
   const names = Array.isArray(r.names) ? r.names.slice(0, MAX_PLAYERS).map((n) => (typeof n === 'string' ? n.slice(0, MAX_NAME) : '')) : [];
-  const players = whole(r.players, 0, 1000);
   const colors = Array.isArray(r.colors) ? r.colors.slice(0, MAX_PLAYERS).map((c) => (isSwatch(c) ? c : -1)) : [];
-  return { players: players != null && players >= 1 && players <= MAX_PLAYERS ? players : DEFAULT_PLAYERS, startingLife: whole(r.startingLife, 1, 999) ?? DEFAULT_LIFE, names, colors };
+  return { players: sanitizePlayers(r.players), startingLife: whole(r.startingLife, 1, 999) ?? DEFAULT_LIFE, names, colors };
 }
 
 export interface LifeLoad {
@@ -342,7 +365,7 @@ export function loadLife(storage: Storage | null): LifeLoad {
     return fresh(true);
   }
   if (typeof data.version === 'number' && data.version > 1) return fresh(true, true);
-  return { store: { version: 1, game: sanitizeGame(data.game), setup: sanitizeSetup(data.setup) }, persistent: true, future: false };
+  return { store: { version: 1, game: sanitizeGame(data.game), setup: sanitizeSetup(data.setup), defaults: sanitizeDefaults(data.defaults) }, persistent: true, future: false };
 }
 
 /** Saves the game; returns false when storage is missing, blocked or full. */

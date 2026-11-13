@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   CMDR_LETHAL,
+  DEFAULT_PLAYERS,
   HISTORY_LIMIT,
   LIFE_KEY,
   PALETTE,
@@ -10,6 +11,7 @@ import {
   contrastWithWhite,
   defaultSetup,
   emptyLife,
+  gameFromDefaults,
   loadLife,
   newGame,
   parseStartingLife,
@@ -81,7 +83,7 @@ describe('newGame', () => {
 
 describe('changeLife', () => {
   it('changes only the chosen player and leaves the old game untouched', () => {
-    const g = newGame(defaultSetup());
+    const g = newGame({ ...defaultSetup(), players: 4 });
     const next = changeLife(g, 2, -10);
     expect(next.players.map((p) => p.life)).toEqual([40, 40, 30, 40]);
     expect(g.players[2].life).toBe(40);
@@ -178,7 +180,7 @@ describe('loadLife and saveLife', () => {
   it('repairs a bad setup to defaults', () => {
     const raw = { version: 1, game: null, setup: { players: 9, startingLife: 'lots', names: [1, 'ok'] } };
     const { setup } = loadLife(fakeStorage({ [LIFE_KEY]: JSON.stringify(raw) })).store;
-    expect(setup.players).toBe(4);
+    expect(setup.players).toBe(2);
     expect(setup.startingLife).toBe(40);
     expect(setup.names).toEqual(['', 'ok']);
     expect(setup.colors).toEqual([]);
@@ -191,6 +193,94 @@ describe('loadLife and saveLife', () => {
     expect(r.future).toBe(true);
     expect(r.store.game).toBeNull();
     expect(s.data[LIFE_KEY]).toBe(raw);
+  });
+});
+
+describe('defaults', () => {
+  const pair = { players: 2, startingLife: 40 };
+  const loadWith = (defaults: unknown) => loadLife(fakeStorage({ [LIFE_KEY]: JSON.stringify({ version: 1, game: null, setup: {}, defaults }) })).store;
+
+  it('start at 2 players and 40 life', () => {
+    expect(DEFAULT_PLAYERS).toBe(2);
+    expect(defaultSetup()).toMatchObject({ players: 2, startingLife: 40 });
+    expect(emptyLife().setup).toMatchObject({ players: 2, startingLife: 40 });
+    expect(emptyLife().defaults).toEqual(pair);
+    expect(emptyLife().version).toBe(1);
+  });
+
+  it('load as the default pair from a store saved before defaults existed', () => {
+    const raw = { version: 1, game: null, setup: { players: 3, startingLife: 30, names: [], colors: [] } };
+    expect(loadLife(fakeStorage({ [LIFE_KEY]: JSON.stringify(raw) })).store.defaults).toEqual(pair);
+  });
+
+  it('load as saved', () => {
+    expect(loadWith({ players: 4, startingLife: 30 }).defaults).toEqual({ players: 4, startingLife: 30 });
+  });
+
+  it('round-trip through saveLife', () => {
+    const s = fakeStorage();
+    const store = emptyLife();
+    store.defaults = { players: 5, startingLife: 25 };
+    saveLife(s, store);
+    expect(loadLife(s).store.defaults).toEqual({ players: 5, startingLife: 25 });
+  });
+
+  it.each([
+    ['players 0', { players: 0, startingLife: 30 }, { players: 2, startingLife: 30 }],
+    ['players 7', { players: 7, startingLife: 30 }, { players: 2, startingLife: 30 }],
+    ['players a string', { players: '2', startingLife: 30 }, { players: 2, startingLife: 30 }],
+    ['players null', { players: null, startingLife: 30 }, { players: 2, startingLife: 30 }],
+    ['players 2.6 (rounds to 3)', { players: 2.6, startingLife: 30 }, { players: 3, startingLife: 30 }],
+    ['life 0 (clamps to 1)', { players: 4, startingLife: 0 }, { players: 4, startingLife: 1 }],
+    ['life 1000 (clamps to 999)', { players: 4, startingLife: 1000 }, { players: 4, startingLife: 999 }],
+    ['life NaN', { players: 4, startingLife: NaN }, { players: 4, startingLife: 40 }],
+    ['life a string', { players: 4, startingLife: 'lots' }, { players: 4, startingLife: 40 }],
+    ['an empty object', {}, pair],
+    ['null', null, pair],
+    ['an array', [4, 30], pair],
+    ['a number', 4, pair],
+  ])('with %s load as a repaired pair, never throwing', (_label, raw, expected) => {
+    expect(loadWith(raw).defaults).toEqual(expected);
+  });
+
+  it('are left as the default pair, with the saved copy untouched, for a store from a newer version', () => {
+    const raw = JSON.stringify({ version: 2, game: { whatever: true }, defaults: { players: 4, startingLife: 30 } });
+    const s = fakeStorage({ [LIFE_KEY]: raw });
+    const r = loadLife(s);
+    expect(r.future).toBe(true);
+    expect(r.store.game).toBeNull();
+    expect(r.store.defaults).toEqual(pair);
+    expect(s.data[LIFE_KEY]).toBe(raw);
+  });
+});
+
+describe('gameFromDefaults', () => {
+  it('takes players and life from defaults, names and colors from setup by seat', () => {
+    const store = emptyLife();
+    store.defaults = { players: 3, startingLife: 30 };
+    store.setup = { players: 6, startingLife: 20, names: ['Ann', '', 'Cy'], colors: [5, -1, 2] };
+    const g = gameFromDefaults(store);
+    expect(g.startingLife).toBe(30);
+    expect(g.players.map((p) => p.life)).toEqual([30, 30, 30]);
+    expect(g.players.map((p) => p.name)).toEqual(['Ann', 'Player 2', 'Cy']);
+    expect(g.players.map((p) => p.color)).toEqual([5, 1, 2]);
+  });
+
+  it('falls back to "Player N" and the seat color past the saved list', () => {
+    const store = emptyLife();
+    store.defaults = { players: 4, startingLife: 40 };
+    store.setup = { players: 2, startingLife: 40, names: ['Ann'], colors: [6] };
+    const g = gameFromDefaults(store);
+    expect(g.players.map((p) => p.name)).toEqual(['Ann', 'Player 2', 'Player 3', 'Player 4']);
+    expect(g.players.map((p) => p.color)).toEqual([6, 1, 2, 3]);
+  });
+
+  it('gives the plain default game (2 players, 40 life) from an empty store', () => {
+    const g = gameFromDefaults(emptyLife());
+    expect(g.players).toHaveLength(2);
+    expect(g.players.map((p) => p.life)).toEqual([40, 40]);
+    expect(g.history).toEqual([]);
+    expect(g.first).toBeNull();
   });
 });
 
