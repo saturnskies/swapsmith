@@ -19,7 +19,7 @@ A Life Counter that opens ready to play and looks like a card table: each seat s
 - Opening the Life Counter tab goes straight to a game (`#/life/game`), never the setup screen. No saved game → a default game: **2 players, 40 life**.
 - The default is editable: a **Defaults** sheet in the game menu (player count, starting life) and a "Make current setup the default" button. The old setup screen becomes the **New game** sheet; there is no screen before the game.
 - The game is remembered across tab switches and app switches, and **never auto-resets**; only New game replaces it. (The owner first said a fully closed app should return to default, then chose "never auto-reset" when shown that the OS kills backgrounded apps. Revisit if lost games are not the pain it seems.)
-- **No confirm on reset of life totals.** Undo already covers a slip.
+- **No confirm on reset of life totals.** A short undo toast covers a slip (the Undo history is emptied by a reset, so it cannot).
 - 2-player layout: **face-to-face**, two full-bleed tiles stacked, the top one rotated 180°, matching how 3–6 players are already seated.
 - Out of the box tiles use the accent palette, art optional.
 
