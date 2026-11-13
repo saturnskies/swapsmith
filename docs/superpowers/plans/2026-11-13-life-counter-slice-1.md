@@ -34,6 +34,7 @@ updated: 2026-11-13
 ## Reuse ladder (rungs that held)
 
 - Rung 2 (in the repo): `segmented`, `parseStartingLife`, `confirmDialog`, `newGame`, `lifeRoute` and the `.picker` dialog styling are extended, not replaced. `seating(2)` already returns `{top: [1], bottom: [0]}` with the top tile rotated 180°, so the face-to-face layout needs no new code, only a test.
+- Rung 2 declined: the Life Counter toast is hand-built rather than reusing `src/ui/undoToast.ts`, because that one is a fixed bottom host with tab-bar offsets and the tab bar is hidden in a game.
 - Rung 4 (platform): `<dialog>` for both sheets, as the menu already does.
 
 ## Execution Routing
