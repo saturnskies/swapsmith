@@ -380,7 +380,6 @@ body { padding-bottom: calc(var(--tabbar-total) + env(safe-area-inset-bottom, 0p
 .tabbar a[aria-current='page'] { color: var(--ink); box-shadow: inset 0 3px 0 var(--accent); }
 
 /* Life Counter: a full-screen table with one tile per player (top row turned to face the far side). */
-.banner:empty { display: none; }
 body.in-game { padding-bottom: 0; overflow: hidden; }
 body.in-game .site-header, body.in-game .site-footer, body.in-game .tabbar { display: none; }
 body.in-game main.wrap { max-width: none; padding: 0; display: block; }
