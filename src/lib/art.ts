@@ -117,10 +117,9 @@ export function dominantColors(pixels: Uint8ClampedArray, n: number): string[] {
 
 const MIN_CONTRAST = 4.5;
 
-/** The color, darkened (never lightened) until white text on it reaches 4.5:1; null when `hex` isn't `#rrggbb`. A readable color comes back as given. */
+/** The color as lowercase `#rrggbb`, darkened (never lightened) until white text on it reaches 4.5:1; null when `hex` isn't `#rrggbb`. */
 export function readable(hex: string): string | null {
   if (typeof hex !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(hex)) return null;
-  if (contrastWithWhite(hex) >= MIN_CONTRAST) return hex;
   let [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
   let out = rgbHex(r, g, b);
   for (let i = 0; i < 400 && contrastWithWhite(out) < MIN_CONTRAST; i++) {
