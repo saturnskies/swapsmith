@@ -18,13 +18,19 @@ const TEXT_MAX = 80;
 /** Opacity of the black scrim over art. White text on the brightest art under it is white on a 40% grey, 5.7:1 (checked in tests). */
 export const SCRIM_ALPHA = 0.6;
 
-/** The art of a card, or null when it has no `illustration_id`, no artist or no art crop (top-level, else the first face's). */
+/**
+ * The art of a card, or null when it has no `illustration_id`, no artist or no art crop. A two-faced card has no
+ * `illustration_id` or `image_uris` of its own (Scryfall puts them on the faces, checked 2026-11-13), so the first
+ * face's are used; the artist comes from the card, else the first face.
+ */
 export function artRefOf(card: ScryCard): ArtRef | null {
-  const url = card.image_uris?.art_crop ?? card.card_faces?.[0]?.image_uris?.art_crop;
-  const artist = card.artist?.trim().slice(0, TEXT_MAX).trim();
+  const face = card.card_faces?.[0];
+  const url = card.image_uris?.art_crop ?? face?.image_uris?.art_crop;
+  const illustration = card.illustration_id ?? face?.illustration_id;
+  const artist = (card.artist ?? face?.artist)?.trim().slice(0, TEXT_MAX).trim();
   const name = card.name?.trim().slice(0, TEXT_MAX).trim();
-  if (!card.illustration_id || !card.id || !artist || !name || !url) return null;
-  return { id: card.illustration_id, cardId: card.id, name, artist, url };
+  if (!illustration || !card.id || !artist || !name || !url) return null;
+  return { id: illustration, cardId: card.id, name, artist, url };
 }
 
 /** The card types the picker offers, in the order they are written into a query. */
