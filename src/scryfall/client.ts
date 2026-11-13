@@ -48,8 +48,14 @@ export interface ClientOptions {
   sleep?: (ms: number) => Promise<void>;
 }
 
+/** Per-call options. */
+export interface GetOptions {
+  /** Ask the network every time: no cache read, no cache write, no sharing with an identical call in flight, no saved reply on failure. For endpoints that answer differently each time (`/cards/random`). */
+  fresh?: boolean;
+}
+
 export interface ScryfallClient {
-  get<T = unknown>(path: string): Promise<T>;
+  get<T = unknown>(path: string, opts?: GetOptions): Promise<T>;
   post<T = unknown>(path: string, body: unknown): Promise<T>;
 }
 
@@ -123,7 +129,8 @@ export function createClient(opts: ClientOptions = {}): ScryfallClient {
   const inFlight = new Map<string, Promise<unknown>>();
   let pruned = false;
 
-  async function send<T>(path: string, init: RequestInit, cacheKey: string): Promise<T> {
+  async function send<T>(path: string, init: RequestInit, cacheKey: string, fresh = false): Promise<T> {
+    if (fresh) return fetchAndCache<T>(path, init, cacheKey, undefined, false);
     const hit = await safe(() => cache.get(cacheKey));
     if (hit && now() - hit.t <= ttlMs) return hit.body as T;
 
@@ -136,7 +143,7 @@ export function createClient(opts: ClientOptions = {}): ScryfallClient {
     return request;
   }
 
-  async function fetchAndCache<T>(path: string, init: RequestInit, cacheKey: string, saved: CacheEntry | undefined): Promise<T> {
+  async function fetchAndCache<T>(path: string, init: RequestInit, cacheKey: string, saved: CacheEntry | undefined, store = true): Promise<T> {
     const useSaved = () => {
       onNetwork('saved');
       return saved!.body as T;
@@ -178,6 +185,7 @@ export function createClient(opts: ClientOptions = {}): ScryfallClient {
         throw new ScryfallError(res.status, `${service} ${res.status}: ${details}`);
       }
       onNetwork('live');
+      if (!store) return body as T;
       await safe(() => cache.set(cacheKey, { t: now(), body }));
       // Once per session, after the first fresh reply: drop saved replies too old to ever be used again.
       if (!pruned) {
@@ -189,7 +197,7 @@ export function createClient(opts: ClientOptions = {}): ScryfallClient {
   }
 
   return {
-    get: (path) => send(path, { headers: { Accept: 'application/json' } }, `${keyPrefix}GET ${path}`),
+    get: (path, o) => send(path, { headers: { Accept: 'application/json' } }, `${keyPrefix}GET ${path}`, o?.fresh === true),
     post: (path, body) => {
       const text = JSON.stringify(body);
       return send(path, { method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json' }, body: text }, `${keyPrefix}POST ${path} ${text}`);
