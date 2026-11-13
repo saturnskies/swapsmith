@@ -391,7 +391,7 @@ test.describe('seating', () => {
   for (const [n, top, bottom] of layouts) {
     test(`${n} player${n > 1 ? 's' : ''}: top row ${JSON.stringify(top)}, bottom row ${JSON.stringify(bottom)}`, async ({ page }) => {
       await start(page, { players: n });
-          const seats = (row: string) => page.locator(`.table-row.${row} .tile`).evaluateAll((els) => els.map((e) => Number((e as HTMLElement).dataset.player)));
+      const seats = (row: string) => page.locator(`.table-row.${row} .tile`).evaluateAll((els) => els.map((e) => Number((e as HTMLElement).dataset.player)));
       expect(await seats('top')).toEqual(top);
       expect(await seats('bottom')).toEqual(bottom);
       // Top-row tiles are turned upside down for the people sitting opposite; bottom-row tiles are upright.
