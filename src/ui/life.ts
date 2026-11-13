@@ -242,10 +242,13 @@ export function createLife(storage: Storage | null): Life {
     let toastTimer = 0;
     const toast = h('div', { class: 'toast life-toast', role: 'status' });
     const clearToast = () => {
+      // The focused Undo is about to leave the page; hand focus to the Menu button (as deckView does for its undo).
+      const lostFocus = toast.contains(document.activeElement);
       window.clearTimeout(toastTimer);
       toastTimer = 0;
       resetSnapshot = null;
       toast.replaceChildren();
+      if (lostFocus) open.focus();
     };
 
     /** Redraws everything a seat's tile shows from the saved game. */
