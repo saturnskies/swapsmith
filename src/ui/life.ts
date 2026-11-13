@@ -8,13 +8,13 @@ import {
   POISON_LETHAL,
   applyChange,
   counter,
+  gameFromDefaults,
   loadLife,
   newGame,
   parseStartingLife,
   randomSeat,
   resetGame,
   saveLife,
-  seatColor,
   seating,
   setColor,
   setFirst,
@@ -22,7 +22,7 @@ import {
   setPartners,
   undo,
   warnings,
-  type Setup,
+  type Defaults,
   type Target,
 } from '../lib/life';
 import { segmented } from './controls';
@@ -39,8 +39,10 @@ const ROLL_STEP_MS = 100;
 
 export interface Life {
   hasGame(): boolean;
-  /** Draws the setup or the game for `route`. Drawn once per route: the container stays mounted while another tab shows. */
-  render(view: HTMLElement, route: string): void;
+  /** Makes sure there is a game to show: the saved one, else a new one from the saved defaults. Safe to call again and again. */
+  ensureGame(): void;
+  /** Draws the game. Drawn once: the container stays mounted while another tab shows. */
+  render(view: HTMLElement): void;
   /** True while the game screen is showing: keeps the screen awake then, and lets go otherwise. */
   setAwake(on: boolean): void;
 }
@@ -82,7 +84,7 @@ function holdButton(o: { text: string; aria: string; delta: 1 | -1; cls: string;
 
 const padded = <T,>(items: T[], blank: T): T[] => Array.from({ length: MAX_PLAYERS }, (_, i) => items[i] ?? blank);
 
-/** One row per seat: a name field and the eight color swatches. The setup and the in-game edit dialog both use it. */
+/** One row per seat: a name field and the eight color swatches. The in-game edit dialog uses it. */
 function playerRows(o: { count: number; name(seat: number): string; color(seat: number): number; onName(seat: number, value: string): void; onColor(seat: number, color: number): void }): HTMLElement {
   return h(
     'div',
@@ -118,26 +120,79 @@ function confirmDialog(host: HTMLElement, o: { id: string; title: string; text: 
   dlg.showModal();
 }
 
-/** The Life Counter: setup screen at `#/life`, the full-screen game at `#/life/game`, saved under its own key after every change. */
+let formIds = 0;
+
+/**
+ * The players and starting-life pickers the New game and Defaults sheets share. `value()` is the picked pair, or null while a
+ * custom starting life is not a whole number from 1 to 999; `onChange` hears about every change (and once now), so a sheet can
+ * enable or disable its button.
+ */
+function setupForm(initial: Defaults, onChange: (value: Defaults | null) => void): { el: HTMLElement; value(): Defaults | null } {
+  const hintId = `life-custom-hint-${++formIds}`;
+  let players = initial.players;
+  let preset = initial.startingLife;
+  let custom = !(LIFE_PRESETS as readonly number[]).includes(preset);
+  let text = custom ? String(preset) : '';
+  const field = h('input', { type: 'text', inputmode: 'numeric', autocomplete: 'off', value: text, 'aria-describedby': hintId, 'aria-invalid': 'false' }) as HTMLInputElement;
+  const hint = h('p', { id: hintId, class: 'small muted life-hint', role: 'status' });
+  const label = h('label', { class: 'stack' }, 'Custom starting life', field);
+  const value = (): Defaults | null => {
+    const startingLife = custom ? parseStartingLife(text) : preset;
+    return startingLife == null ? null : { players, startingLife };
+  };
+  const sync = () => {
+    const bad = custom && parseStartingLife(text) == null;
+    label.hidden = !custom;
+    hint.textContent = bad ? 'Enter a whole number from 1 to 999.' : '';
+    field.setAttribute('aria-invalid', String(bad));
+    onChange(value());
+  };
+  field.addEventListener('input', () => {
+    text = field.value;
+    sync();
+  });
+  const lifeOptions = [...LIFE_PRESETS.map((n) => ({ id: String(n), label: String(n) })), { id: 'custom', label: 'Custom' }];
+  const el = h(
+    'div',
+    { class: 'stack' },
+    h('div', { class: 'stack' }, h('strong', {}, 'Players'), segmented('Players', Array.from({ length: MAX_PLAYERS }, (_, i) => ({ id: String(i + 1), label: String(i + 1) })), String(players), (id) => {
+      players = Number(id);
+      sync();
+    })),
+    h(
+      'div',
+      { class: 'stack' },
+      h('strong', {}, 'Starting life'),
+      segmented('Starting life', lifeOptions, custom ? 'custom' : String(preset), (id) => {
+        custom = id === 'custom';
+        if (custom) {
+          text = text || String(preset);
+          field.value = text;
+        } else preset = Number(id);
+        sync();
+      }),
+      label,
+      hint,
+    ),
+  );
+  sync();
+  return { el, value };
+}
+
+/** The Life Counter: the full-screen game at `#/life/game` (its only screen), saved under its own key after every change. */
 export function createLife(storage: Storage | null): Life {
   const loaded = loadLife(storage);
   const store = loaded.store;
   /** A newer version's save sits in storage: leave it alone until a new game starts. */
   let future = loaded.future;
   let saved = loaded.persistent;
-  let drawn: string | null = null;
+  let drawn = false;
   let notices: HTMLElement[] = [];
   /** Counts screen draws: a roll started on an older draw must not write into a newer one. */
   let drawId = 0;
   let awakeState: AwakeState | null = null;
   let stopAwake: (() => void) | null = null;
   let awakeNotes: HTMLElement[] = [];
-
-  // The setup being edited; it lives here so redrawing the screen keeps what was picked.
-  const draft: Setup = { ...store.setup, names: [...store.setup.names] };
-  let custom = !(LIFE_PRESETS as readonly number[]).includes(draft.startingLife);
-  let customText = custom ? String(draft.startingLife) : '';
-  while (draft.colors.length < draft.players) draft.colors.push(-1);
 
   const notice = () => {
     const n = h('p', { class: 'banner notice', role: 'status' }, saved ? '' : UNSAVED);
@@ -150,87 +205,19 @@ export function createLife(storage: Storage | null): Life {
     for (const n of notices) n.textContent = saved ? '' : UNSAVED;
   };
 
-  /** Remembers the typed names and colors for the next game. */
-  const remember = () => (store.setup = { ...store.setup, names: padded(draft.names, ''), colors: padded(draft.colors, -1) });
+  /** Remembers a seat's name or color for the next game. */
+  const remember = (seat: number, patch: { name?: string; color?: number }) => {
+    const names = padded(store.setup.names, '');
+    const colors = padded(store.setup.colors, -1);
+    if (patch.name !== undefined) names[seat] = patch.name.slice(0, MAX_NAME);
+    if (patch.color !== undefined) colors[seat] = patch.color;
+    store.setup = { ...store.setup, names, colors };
+  };
   const awakeNote = () => {
     const n = h('p', { class: 'banner notice', role: 'status' }, awakeState === 'unsupported' || awakeState === 'denied' ? AWAKE_MSG : '');
     awakeNotes.push(n);
     return n;
   };
-
-  function begin() {
-    store.setup = { players: draft.players, startingLife: draft.startingLife, names: padded(draft.names, ''), colors: padded(draft.colors, -1) };
-    store.game = newGame(store.setup);
-    future = false;
-    persist();
-    location.hash = '#/life/game';
-  }
-
-  function drawSetup(view: HTMLElement) {
-    drawId++;
-    notices = [];
-    const redraw = () => drawSetup(view);
-    const startLife = custom ? parseStartingLife(customText) : draft.startingLife;
-    const lifeOptions = [...LIFE_PRESETS.map((n) => ({ id: String(n), label: String(n) })), { id: 'custom', label: 'Custom' }];
-
-    const field = h('input', { type: 'text', inputmode: 'numeric', autocomplete: 'off', value: customText, 'aria-describedby': 'life-custom-hint' }) as HTMLInputElement;
-    const hint = h('p', { id: 'life-custom-hint', class: 'small muted', role: 'status' });
-    const go = h('button', { type: 'button', class: 'button primary' }, store.game ? 'New game' : 'Start game') as HTMLButtonElement;
-    const check = () => {
-      const n = parseStartingLife(customText);
-      hint.textContent = n == null ? 'Enter a whole number from 1 to 999.' : '';
-      go.disabled = n == null;
-      if (n != null) draft.startingLife = n;
-    };
-    field.addEventListener('input', () => {
-      customText = field.value;
-      check();
-    });
-    if (custom) check();
-
-    go.addEventListener('click', () => {
-      if (!store.game) return begin();
-      confirmDialog(view, { id: 'life-confirm-h', title: 'Replace the game in progress?', text: 'Its life totals will be lost.', keep: 'Keep current game', yes: 'Replace it', onYes: begin });
-    });
-
-    view.replaceChildren(
-      h(
-        'section',
-        { class: 'stack', 'aria-labelledby': 'life-h' },
-        h('h2', { id: 'life-h' }, 'Life Counter'),
-        store.game ? h('div', { class: 'actions' }, h('a', { class: 'button primary', href: '#/life/game' }, 'Resume game')) : null,
-        notice(),
-        h('div', { class: 'stack' }, h('strong', {}, 'Players'), segmented('Players', Array.from({ length: MAX_PLAYERS }, (_, i) => ({ id: String(i + 1), label: String(i + 1) })), String(draft.players), (id) => ((draft.players = Number(id)), redraw()))),
-        h(
-          'div',
-          { class: 'stack' },
-          h('strong', {}, 'Starting life'),
-          segmented('Starting life', lifeOptions, custom ? 'custom' : String(draft.startingLife), (id) => {
-            custom = id === 'custom';
-            if (!custom) draft.startingLife = Number(id);
-            else if (startLife != null) customText = customText || String(startLife);
-            redraw();
-          }),
-          custom ? h('label', { class: 'stack' }, 'Custom starting life', field) : null,
-          custom ? hint : null,
-        ),
-        h(
-          'div',
-          { class: 'stack' },
-          h('strong', {}, 'Names and colors'),
-          h('p', { class: 'small muted' }, 'Seats run clockwise from the bottom left of the table. A blank name is "Player 1", "Player 2" and so on.'),
-          playerRows({
-            count: draft.players,
-            name: (i) => draft.names[i] ?? '',
-            color: (i) => seatColor(draft.colors[i], i),
-            onName: (i, v) => (draft.names[i] = v.slice(0, MAX_NAME)),
-            onColor: (i, c) => (draft.colors[i] = c),
-          }),
-        ),
-        h('div', { class: 'actions' }, go),
-      ),
-    );
-  }
 
   function drawGame(view: HTMLElement) {
     const me = ++drawId;
@@ -381,15 +368,13 @@ export function createLife(storage: Storage | null): Life {
           color: (i) => store.game!.players[i].color,
           onName: (i, v) => {
             store.game = setName(store.game!, i, v);
-            draft.names[i] = v.slice(0, MAX_NAME);
-            remember();
+            remember(i, { name: v });
             updateAll();
             persist();
           },
           onColor: (i, c) => {
             store.game = setColor(store.game!, i, c);
-            draft.colors[i] = c;
-            remember();
+            remember(i, { color: c });
             updateAll();
             persist();
           },
@@ -429,6 +414,88 @@ export function createLife(storage: Storage | null): Life {
       };
       tick(0);
     });
+    /** One New game or Defaults sheet at a time: a second tap while one is showing does nothing. */
+    let sheetOpen = false;
+    const openSetupSheet = (build: () => HTMLDialogElement) => {
+      if (sheetOpen) return;
+      sheetOpen = true;
+      menu.close();
+      const dlg = build();
+      dlg.addEventListener('close', () => {
+        sheetOpen = false;
+        dlg.remove();
+      });
+      view.append(dlg);
+      dlg.showModal();
+    };
+
+    /** Players and starting life for a fresh game, from the saved defaults. Starting asks first: a game always exists. */
+    const newGameDialog = () => {
+      const start = h('button', { type: 'submit', class: 'button primary' }, 'Start') as HTMLButtonElement;
+      const close = h('button', { type: 'button', class: 'button' }, 'Close');
+      const form = setupForm(store.defaults, (v) => (start.disabled = v == null));
+      const el = h('form', { class: 'stack' }, h('h2', { id: 'newgame-h' }, 'New game'), notice(), form.el, h('div', { class: 'actions' }, start, close));
+      const dlg = h('dialog', { class: 'picker sheet', 'aria-labelledby': 'newgame-h' }, el);
+      close.addEventListener('click', () => dlg.close());
+      el.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const picked = form.value();
+        if (!picked) return;
+        confirmDialog(view, {
+          id: 'life-confirm-h',
+          title: 'Replace the game in progress?',
+          text: 'Its life totals will be lost.',
+          keep: 'Keep current game',
+          yes: 'Replace it',
+          onYes: () => {
+            if (me !== drawId) return;
+            store.setup = { ...store.setup, players: picked.players, startingLife: picked.startingLife };
+            store.game = newGame(store.setup);
+            future = false;
+            persist();
+            drawGame(view);
+          },
+        });
+      });
+      return dlg;
+    };
+
+    /** The pair the Life Counter opens into when there is no saved game, and the form's start for every New game. */
+    const defaultsDialog = () => {
+      const save = h('button', { type: 'submit', class: 'button primary' }, 'Save defaults') as HTMLButtonElement;
+      const useGame = h('button', { type: 'button', class: 'button' }, "Use this game's setup");
+      const close = h('button', { type: 'button', class: 'button' }, 'Close');
+      const savedNote = h('p', { class: 'small muted saved-note', role: 'status' });
+      const holder = h('div', { class: 'stack' });
+      let form = { value: (): Defaults | null => null };
+      const mount = (d: Defaults) => {
+        const f = setupForm(d, (v) => {
+          save.disabled = v == null;
+          savedNote.textContent = '';
+        });
+        form = f;
+        holder.replaceChildren(f.el);
+      };
+      mount(store.defaults);
+      const el = h('form', { class: 'stack' }, h('h2', { id: 'defaults-h' }, 'Defaults'), h('p', { class: 'small muted' }, 'The players and starting life a new game starts with.'), notice(), holder, h('div', { class: 'actions' }, useGame, save, close), savedNote);
+      const dlg = h('dialog', { class: 'picker sheet', 'aria-labelledby': 'defaults-h' }, el);
+      close.addEventListener('click', () => dlg.close());
+      useGame.addEventListener('click', () => mount({ players: store.game!.players.length, startingLife: store.game!.startingLife }));
+      el.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const picked = form.value();
+        if (!picked) return;
+        store.defaults = picked;
+        persist();
+        savedNote.textContent = saved && !future ? 'Saved' : 'Used for now, but not stored.';
+      });
+      return dlg;
+    };
+
+    const newBtn = h('button', { type: 'button', class: 'button' }, 'New game');
+    newBtn.addEventListener('click', () => openSetupSheet(newGameDialog));
+    const defaultsBtn = h('button', { type: 'button', class: 'button' }, 'Defaults');
+    defaultsBtn.addEventListener('click', () => openSetupSheet(defaultsDialog));
     const close = h('button', { type: 'button', class: 'button' }, 'Close');
     const menu = h(
       'dialog',
@@ -436,7 +503,7 @@ export function createLife(storage: Storage | null): Life {
       h('h2', { id: 'game-menu-h' }, 'Game menu'),
       notice(),
       awakeNote(),
-      h('div', { class: 'actions' }, undoBtn, rollBtn, edit, reset, h('a', { class: 'button', href: '#/life' }, 'Leave game'), close),
+      h('div', { class: 'menu-actions' }, undoBtn, rollBtn, newBtn, defaultsBtn, edit, reset, h('a', { class: 'button', href: '#/' }, 'Leave game'), close),
     );
     close.addEventListener('click', () => menu.close());
     const open = h('button', { type: 'button', class: `table-menu${top.length ? '' : ' corner'}`, 'aria-label': 'Game menu' }, 'Menu');
@@ -466,11 +533,16 @@ export function createLife(storage: Storage | null): Life {
         stopAwake = null;
       }
     },
-    render(view, route) {
-      if (route === drawn) return;
-      drawn = route;
-      if (route === '#/life/game' && store.game) drawGame(view);
-      else drawSetup(view);
+    ensureGame() {
+      if (!store.game) {
+        store.game = gameFromDefaults(store);
+        persist();
+      }
+    },
+    render(view) {
+      if (drawn) return;
+      drawn = true;
+      drawGame(view);
     },
   };
 }
