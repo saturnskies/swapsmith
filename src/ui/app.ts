@@ -122,8 +122,8 @@ export function startApp(root: HTMLElement): void {
   function render(force = false) {
     const hash = location.hash || '#/';
     const tab = tabOf(hash);
-    if (tab === 'life' && lifeRoute(hash, life.hasGame()) !== hash) {
-      location.replace(lifeRoute(hash, life.hasGame()));
+    if (tab === 'life' && lifeRoute(hash) !== hash) {
+      location.replace(lifeRoute(hash));
       return;
     }
     // A game fills the screen: the stylesheet hides the header, footer and tab bar while this is set.
