@@ -11,13 +11,14 @@ import { roleLookupNames, scoreEdhrec, scoreSuggestions } from '../../src/lib/su
 import { candidatePool, deckCardFacts, rulesText } from '../../src/scryfall/suggest';
 import { deckRoles } from '../../src/scryfall/roles';
 import { cheaperReplacements, edhrecKeepScores, swapPairs } from '../../src/lib/swaps';
-import { fixtureFetch, requestKey, trim, trimEdhrec, type FixtureMap } from '../support/fixtures';
+import { fixtureFetch, requestKey, trim, trimArt, trimEdhrec, type FixtureMap } from '../support/fixtures';
 import { commanderPage, createEdhrecClient, EDHREC_BASE } from '../../src/edhrec/page';
 import { edhrecCandidates } from '../../src/edhrec/candidates';
 import { estimateBracket, type PageFilter } from '../../src/lib/edhrec';
 import type { Deck } from '../../src/lib/deck';
 import { gameChangerCount } from '../../src/scryfall/names';
 import { searchCards } from '../../src/scryfall/browse';
+import { USABLE_ART } from '../../src/scryfall/art';
 import { cardsByOracleId, cheapestPrintings, printings } from '../../src/scryfall/cards';
 import { SORTS } from '../../src/lib/browse';
 import { pageRoles, scoredPage } from '../support/swap-pool';
@@ -367,5 +368,30 @@ describe.runIf(process.env.RECORD === '1' || FILL)('record Browse fixtures', () 
     }
     writeFileSync(new URL('../fixtures/scryfall-browse.json', import.meta.url), JSON.stringify(map));
     console.log(`recorded ${Object.keys(map).length} Browse requests`);
+  }, 120_000);
+  it('records the Life Counter art search and random calls', async () => {
+    const map: FixtureMap = {};
+    const recording: typeof fetch = async (input, init) => {
+      const headers = { ...Object.fromEntries(new Headers(init?.headers)), 'User-Agent': 'Swapsmith-fixture-recorder/0.1' };
+      const res = await fetch(input, { ...init, headers });
+      map[requestKey(init?.method ?? 'GET', String(input), init?.body as string | undefined)] = { status: res.status, body: trimArt(await res.clone().json()) };
+      return res;
+    };
+    const client = createClient({ fetch: fill('scryfall-art.json', map, recording), cache: memoryCache() });
+    // What the picker asks for: the query artQuery builds, then USABLE_ART (checked live, see src/scryfall/art.ts), unique=art, order=released.
+    const search = (q: string, page = 1) => client.get(`/cards/search?${new URLSearchParams({ q: `${q} ${USABLE_ART}`, unique: 'art', order: 'released', page: String(page) })}`).catch(() => undefined);
+    await search('name:"delver"'); // 13 artworks, six of them two-faced (illustration_id and art_crop only on the faces)
+    await search('a:"quinton hoover"'); // by artist
+    await search('name:"zzzzqq"'); // 404: no match
+    await search('name:"delver" (bogus:thing)'); // 200 with warnings: Scryfall drops the unknown term
+    await search('(t:elf'); // 400: unbalanced parenthesis
+    await client.get(`/cards/random?${new URLSearchParams({ q: USABLE_ART })}`, { fresh: true });
+
+    map['NOTE'] = {
+      status: 0,
+      body: 'Recorded 2026-11-13 from api.scryfall.com by tests/unit/record-fixtures.test.ts (RECORD=1 ... -t "art search"). Trimmed to art fields by trimArt. Seen: unique=art lists one card per illustration; a two-faced card has artist, illustration_id and art_crop on card_faces[], with no top-level illustration_id or image_uris (artist is also top-level); a card with no artist (Lost Mine of Phandelver) exists; an unknown term answers 200 with warnings; no match is 404; an unbalanced parenthesis is 400; -is:placeholder is NOT supported (warning), is:highres is.',
+    };
+    writeFileSync(new URL('../fixtures/scryfall-art.json', import.meta.url), JSON.stringify(map, null, 1) + '\n');
+    expect(Object.keys(map).length).toBeGreaterThan(5);
   }, 120_000);
 });
