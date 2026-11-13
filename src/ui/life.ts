@@ -457,6 +457,8 @@ export function createLife(storage: Storage | null): Life {
             future = false;
             persist();
             drawGame(view);
+            // The sheet and the menu it came from are gone with the old draw; keep focus on the new game's menu button.
+            view.querySelector<HTMLElement>('.table-menu')?.focus();
           },
         });
       });
