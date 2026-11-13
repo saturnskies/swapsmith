@@ -23,11 +23,14 @@ import {
   setColor,
   setFirst,
   setName,
+  setAccent,
+  setArt,
   setPartners,
   undo,
   warnings,
   type Game,
 } from '../../src/lib/life';
+import type { ArtRef } from '../../src/lib/art';
 
 /** A Storage stand-in that can be told to fail. */
 function fakeStorage(initial: Record<string, string> = {}, opts: { failGet?: boolean; failSet?: boolean } = {}): Storage & { data: Record<string, string> } {
@@ -628,5 +631,156 @@ describe('randomSeat', () => {
       seen.add(n);
     }
     expect(seen.size).toBe(4);
+  });
+});
+
+describe('seat art and accent', () => {
+  const art = (over: Partial<ArtRef> = {}): ArtRef => ({ id: 'illus-1', cardId: 'card-1', name: 'Edgar Markov', artist: 'Eric Deschamps', url: 'https://cards.scryfall.io/art_crop/front/a/b/ab.jpg?1', ...over });
+  const load = (raw: unknown) => loadLife(fakeStorage({ [LIFE_KEY]: JSON.stringify(raw) })).store;
+  const gameWith = (players: unknown[]) => ({ version: 1, game: { startingLife: 40, players }, setup: {} });
+  const seat = (extra: Record<string, unknown>) => ({ name: 'A', life: 40, ...extra });
+
+  it('setArt and setAccent return new games, change only that seat, and are not undoable', () => {
+    const g = changeLife(three(), 0, -2);
+    const a = setArt(g, 1, art());
+    expect(a).not.toBe(g);
+    expect(a.players[1].art).toEqual(art());
+    expect(a.players[0].art).toBeUndefined();
+    expect(a.history).toEqual(g.history);
+    const b = setAccent(a, 2, '#B3261E');
+    expect(b.players[2].accent).toBe('#b3261e');
+    expect(b.players[1].accent).toBeUndefined();
+    expect(b.history).toEqual(g.history);
+    expect(g.players[1].art).toBeUndefined();
+  });
+
+  it('null removes the art or accent; removing what is not there changes nothing', () => {
+    const g = setAccent(setArt(three(), 0, art()), 0, '#123456');
+    const cleared = setAccent(setArt(g, 0, null), 0, null);
+    expect(cleared.players[0]).not.toHaveProperty('art');
+    expect(cleared.players[0]).not.toHaveProperty('accent');
+    expect(setArt(three(), 0, null).players).toEqual(three().players);
+  });
+
+  it('ignores a seat that does not exist, a malformed art and a bad accent', () => {
+    const g = three();
+    expect(setArt(g, 9, art())).toBe(g);
+    expect(setAccent(g, 9, '#123456')).toBe(g);
+    expect(setArt(g, 0, art({ url: 'http://cards.scryfall.io/x.jpg' }))).toBe(g);
+    expect(setAccent(g, 0, 'red')).toBe(g);
+    expect(setAccent(g, 0, '#12')).toBe(g);
+  });
+
+  it('keeps art and accent through undo, reset and the other setters', () => {
+    let g = setAccent(setArt(three(), 0, art()), 0, '#123456');
+    g = changeLife(g, 0, -3);
+    for (const next of [undo(g), resetGame(g), setName(g, 0, 'Zed'), setColor(g, 0, 3)]) {
+      expect(next.players[0].art).toEqual(art());
+      expect(next.players[0].accent).toBe('#123456');
+    }
+  });
+
+  it('round-trips art and accent in the game and the setup', () => {
+    const s = fakeStorage();
+    const store = emptyLife();
+    store.setup = { players: 3, startingLife: 40, names: [], colors: [], arts: [art(), null, art({ id: 'illus-2' })], accents: ['#123456', null, '#abcdef'] };
+    store.game = setAccent(setArt(newGame(store.setup), 1, art({ id: 'illus-3' })), 1, '#654321');
+    expect(saveLife(s, store)).toBe(true);
+    const back = loadLife(s).store;
+    expect(back.setup).toEqual(store.setup);
+    expect(back.game?.players[1]).toMatchObject({ art: art({ id: 'illus-3' }), accent: '#654321' });
+    expect(back.game?.players[0]).toMatchObject({ art: art(), accent: '#123456' });
+  });
+
+  it('loads an older store without any of it exactly as before', () => {
+    const store = load({ version: 1, game: { startingLife: 40, players: [{ name: 'A', life: 40 }] }, setup: { players: 2, startingLife: 30, names: ['A'], colors: [1] } });
+    expect(store.game!.players[0]).not.toHaveProperty('art');
+    expect(store.game!.players[0]).not.toHaveProperty('accent');
+    expect(store.setup).toEqual({ players: 2, startingLife: 30, names: ['A'], colors: [1] });
+    expect(store.setup).not.toHaveProperty('arts');
+    expect(store.setup).not.toHaveProperty('accents');
+  });
+
+  it('drops an art of the wrong shape, and keeps the player', () => {
+    const bad: unknown[] = [
+      null,
+      [],
+      [art()],
+      'https://cards.scryfall.io/x.jpg',
+      42,
+      {},
+      art({ id: undefined as unknown as string }),
+      art({ cardId: 7 as unknown as string }),
+      art({ name: '' }),
+      art({ artist: '' }),
+      art({ url: undefined as unknown as string }),
+      art({ url: 'javascript:alert(1)' }),
+      art({ url: 'http://cards.scryfall.io/x.jpg' }),
+      art({ url: 'data:image/png;base64,AAAA' }),
+      art({ url: 'https://' }),
+      art({ url: 'not a url' }),
+      art({ url: `https://cards.scryfall.io/${'x'.repeat(400)}` }),
+      art({ name: 'n'.repeat(81) }),
+      art({ artist: 'a'.repeat(81) }),
+      art({ id: 'i'.repeat(65) }),
+      art({ cardId: 'c'.repeat(65) }),
+    ];
+    for (const a of bad) {
+      const store = load(gameWith([seat({ art: a })]));
+      expect(store.game!.players).toHaveLength(1);
+      expect(store.game!.players[0]).not.toHaveProperty('art');
+    }
+  });
+
+  it('keeps only the five known fields of a good art', () => {
+    const store = load(gameWith([seat({ art: { ...art(), extra: 'x', onload: 'bad()' } })]));
+    expect(store.game!.players[0].art).toEqual(art());
+  });
+
+  it('drops an accent that is not #rrggbb and lowercases one that is', () => {
+    for (const bad of ['red', '#12', '#12345', '#1234567', '#gggggg', '123456', 7, null, ['#123456'], { a: 1 }]) {
+      expect(load(gameWith([seat({ accent: bad })])).game!.players[0]).not.toHaveProperty('accent');
+    }
+    expect(load(gameWith([seat({ accent: '#ABCDEF' })])).game!.players[0].accent).toBe('#abcdef');
+  });
+
+  it('repairs the setup arrays: bad entries become null, the lists are cut to six, a non-array is dropped', () => {
+    const raw = { version: 1, game: null, setup: { arts: [art(), 'x', null, { id: 1 }, art({ url: 'http://a/b' }), art({ id: 'z' }), art({ id: 'seventh' })], accents: ['#123456', 'red', 5, null, '#ABCDEF', '#000000', '#ffffff'] } };
+    const { setup } = load(raw);
+    expect(setup.arts).toEqual([art(), null, null, null, null, art({ id: 'z' })]);
+    expect(setup.accents).toEqual(['#123456', null, null, null, '#abcdef', '#000000']);
+    for (const bad of ['x', 3, null, { 0: art() }]) {
+      const s = load({ version: 1, game: null, setup: { arts: bad, accents: bad } }).setup;
+      expect(s).not.toHaveProperty('arts');
+      expect(s).not.toHaveProperty('accents');
+    }
+  });
+
+  it('newGame gives each seat its art and accent from the setup by index', () => {
+    const g = newGame({ players: 3, startingLife: 40, names: [], colors: [], arts: [art(), null], accents: [null, '#123456', 'red' as unknown as string] });
+    expect(g.players[0].art).toEqual(art());
+    expect(g.players[1]).not.toHaveProperty('art');
+    expect(g.players[1].accent).toBe('#123456');
+    expect(g.players[2]).not.toHaveProperty('art');
+    expect(g.players[2]).not.toHaveProperty('accent');
+    // Nothing from the setup means nothing on the player, and the old setup shape still works.
+    expect(newGame({ players: 2, startingLife: 40, names: [], colors: [] }).players[0]).not.toHaveProperty('art');
+  });
+
+  it('newGame does not share the art object with the setup', () => {
+    const setup = { players: 1, startingLife: 40, names: [], colors: [], arts: [art()] };
+    expect(newGame(setup).players[0].art).not.toBe(setup.arts[0]);
+  });
+
+  it('gameFromDefaults carries names, colors, art and accent by seat and drops them past the player count', () => {
+    const store = emptyLife();
+    store.defaults = { players: 2, startingLife: 40 };
+    store.setup = { players: 4, startingLife: 40, names: ['Ann', 'Bo'], colors: [3, -1], arts: [null, art(), art({ id: 'z' }), null], accents: ['#123456', null, '#abcdef', null] };
+    const g = gameFromDefaults(store);
+    expect(g.players).toHaveLength(2);
+    expect(g.players[0]).toMatchObject({ name: 'Ann', color: 3, accent: '#123456' });
+    expect(g.players[0]).not.toHaveProperty('art');
+    expect(g.players[1].art).toEqual(art());
+    expect(g.players[1]).not.toHaveProperty('accent');
   });
 });
