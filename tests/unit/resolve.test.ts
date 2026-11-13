@@ -2,12 +2,13 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { deckTotals } from '../../src/lib/deck';
 import { parseDeckList } from '../../src/lib/parse';
-import { createClient, memoryCache } from '../../src/scryfall/client';
-import { buildDeck, commanderCandidates, priceDeck, resolveList, withPrinting } from '../../src/scryfall/resolve';
+import { printings } from '../../src/scryfall/cards';
+import { createClient, memoryCache, ScryfallError } from '../../src/scryfall/client';
+import { buildDeck, commanderCandidates, priceDeck, priceEntries, resolveList, withPrinting } from '../../src/scryfall/resolve';
 import type { ScryCard } from '../../src/scryfall/types';
 import { fixtureFetch, type FixtureMap } from '../support/fixtures';
 
-// Real Scryfall replies recorded 2026-11-02 for tests/fixtures/e2e-list.txt (see record-fixtures.test.ts).
+// Real Scryfall replies for tests/fixtures/e2e-list.txt (see record-fixtures.test.ts): the lookups recorded 2026-11-02, the prices 2026-11-12.
 const map: FixtureMap = JSON.parse(readFileSync(new URL('../fixtures/scryfall-e2e.json', import.meta.url), 'utf8'));
 const list = readFileSync(new URL('../fixtures/e2e-list.txt', import.meta.url), 'utf8');
 
@@ -105,44 +106,27 @@ describe('commanderCandidates and buildDeck', () => {
 });
 
 describe('priceDeck', () => {
-  it('prices each card at its cheapest printing, foil included, with direct TCGplayer links', async () => {
+  it('prices each card at its cheapest printing, with direct TCGplayer links', async () => {
     const { client, lines, fetch } = await resolvedLines();
     const progress: Array<[number, number]> = [];
     const priced = await priceDeck(client, buildDeck('E2E', lines, commanderCandidates(lines)[0]), (d, t) => progress.push([d, t]));
 
     expect(priced.map((p) => [p.entry.card.name, p.card?.set, p.card?.collector_number, p.price, p.finish])).toEqual([
-      ['Edgar Markov', 'inr', '428', 29.08, 'nonfoil'],
-      ['Bloodline Keeper // Lord of Lineage', 'inr', '327', 4.88, 'foil'],
-      ['Kalastria Highborn', 'fdn', '607', 0.25, 'nonfoil'],
-      ['Sol Ring', 'fic', '357', 1.1, 'nonfoil'],
+      ['Edgar Markov', 'inr', '428', 32.17, 'nonfoil'],
+      ['Bloodline Keeper // Lord of Lineage', 'inr', '327', 4.94, 'nonfoil'],
+      ['Kalastria Highborn', 'fdn', '753', 0.27, 'nonfoil'],
+      ['Sol Ring', 'trc', '499', 1.28, 'nonfoil'],
       ['Vampire Nighthawk', 'c13', '97', 0.16, 'nonfoil'],
-      ['Swamp', 'ddq', '74', 0.11, 'nonfoil'],
+      ['Swamp', 'fdn', '276', 0.09, 'nonfoil'],
     ]);
     expect(priced[0]).toMatchObject({ isCommander: true, url: 'https://www.tcgplayer.com/product/596294' });
-    expect(deckTotals(priced.map((p) => ({ qty: p.entry.qty, price: p.price })))).toEqual({ total: 36.35, unpriced: 0, count: 13 });
+    expect(deckTotals(priced.map((p) => ({ qty: p.entry.qty, price: p.price })))).toEqual({ total: 39.54, unpriced: 0, count: 13 });
     expect(progress[0]).toEqual([0, 6]);
     expect(progress.at(-1)).toEqual([6, 6]);
     expect(fetch.misses).toEqual([]);
   });
 
-  it('still prices the rest of the deck when a batch of printings fails to load', async () => {
-    const { lines } = await resolvedLines();
-    const deck = buildDeck('E2E', lines, commanderCandidates(lines)[0]);
-    const recorded = fixtureFetch(map);
-    // The shared search for the non-basic cards (an OR query) fails; the Swamp's own search still works.
-    const broken: typeof fetch = async (input, init) => {
-      if (String(input).includes('+or+')) throw new TypeError('Failed to fetch');
-      return recorded(input, init);
-    };
-    const priced = await priceDeck(createClient({ fetch: broken, cache: memoryCache(), spacingMs: 0, sleep: async () => {} }), deck);
-
-    const sol = priced.find((p) => p.entry.card.name === 'Sol Ring')!;
-    expect(sol).toMatchObject({ failed: true, price: null, card: { name: 'Sol Ring' } });
-    expect(priced.find((p) => p.entry.card.name === 'Swamp')).toMatchObject({ price: 0.11 });
-    expect(priced.filter((p) => p.failed)).toHaveLength(5);
-  });
-
-  it('needs only a handful of requests for a deck', async () => {
+  it('needs one request for a small deck: no lookup per card, and no list of every printing', async () => {
     const { lines } = await resolvedLines();
     const recorded = fixtureFetch(map);
     const calls: string[] = [];
@@ -151,62 +135,147 @@ describe('priceDeck', () => {
       return recorded(input, init);
     };
     await priceDeck(createClient({ fetch: counting, cache: memoryCache(), spacingMs: 0 }), buildDeck('E2E', lines, commanderCandidates(lines)[0]));
-    // 1 collection + 1 shared search for the 5 non-basic cards + 2 for the Swamp (more than a page of printings).
-    expect(calls).toHaveLength(4);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain('unique=cards');
     expect(recorded.misses).toEqual([]);
   });
 
-  it('keeps every printing for the picker, and prices a chosen printing instead of the cheapest', async () => {
+  it('prices a chosen printing instead of the cheapest, and goes back to the cheapest', async () => {
     const { client, lines } = await resolvedLines();
     const deck = buildDeck('E2E', lines, commanderCandidates(lines)[0]);
-    const priced = await priceDeck(client, deck);
-    const edgar = priced[0];
-    expect(edgar.prints.map((c) => `${c.set} ${c.collector_number}`)).toEqual(expect.arrayContaining(['inr 428', 'inr 328', 'c17 36']));
+    const edgar = (await priceDeck(client, deck))[0];
+    const prints = await printings(client, deck.commander.oracleId);
+    expect(prints.map((c) => `${c.set} ${c.collector_number}`)).toEqual(expect.arrayContaining(['inr 428', 'inr 328', 'c17 36']));
 
-    const inr328 = edgar.prints.find((c) => c.collector_number === '328')!;
-    const picked = withPrinting(edgar, inr328.id);
-    expect(picked).toMatchObject({ price: 32.66, finish: 'nonfoil', url: 'https://www.tcgplayer.com/product/596295', entry: { printingId: inr328.id } });
+    const inr328 = prints.find((c) => c.collector_number === '328')!;
+    const picked = withPrinting(edgar, inr328);
+    expect(picked).toMatchObject({ price: 33.4, finish: 'nonfoil', url: 'https://www.tcgplayer.com/product/596295', entry: { printingId: inr328.id } });
     expect(edgar.entry.printingId).toBeUndefined(); // the original is unchanged
 
+    // A foil-only printing is priced at its foil.
+    expect(withPrinting(edgar, prints.find((c) => c.set === 'c17')!)).toMatchObject({ price: 42.51, finish: 'foil' });
+
     const reset = withPrinting(picked, undefined);
-    expect(reset).toMatchObject({ price: 29.08, card: { collector_number: '428' } });
+    expect(reset).toMatchObject({ price: 32.17, card: { collector_number: '428' } });
     expect(reset.entry.printingId).toBeUndefined();
   });
 
-  it('prices the commander at its chosen printing when the deck says so', async () => {
+  it('prices the commander at its chosen printing when the deck says so, and still knows the cheapest', async () => {
     const { client, lines, fetch } = await resolvedLines();
     const deck = buildDeck('E2E', lines, commanderCandidates(lines)[0]);
-    const first = await priceDeck(client, deck);
-    const c17 = first[0].prints.find((c) => c.set === 'c17')!;
-    const again = await priceDeck(client, { ...deck, commanderPrintingId: c17.id });
-    expect(again[0]).toMatchObject({ isCommander: true, price: 42.5, finish: 'foil', card: { set: 'c17' } });
+    const inr328 = (await printings(client, deck.commander.oracleId)).find((c) => c.collector_number === '328')!;
+    const again = await priceDeck(client, { ...deck, commanderPrintingId: inr328.id });
+    expect(again[0]).toMatchObject({ isCommander: true, price: 33.4, finish: 'nonfoil', card: { collector_number: '328' }, cheapest: { collector_number: '428' } });
     expect(fetch.misses).toEqual([]);
+  });
+});
+
+// Hand-made replies in the shape of the recorded ones, for failures and cards the recordings don't hold.
+describe('priceEntries when Scryfall answers only in part', () => {
+  const card = (id: string, usd: string | null, extra: Partial<ScryCard> = {}) =>
+    ({ object: 'card', id: `print-${id}`, oracle_id: id, name: `Card ${id}`, set: 'tst', collector_number: '1', type_line: 'Creature', prices: { usd, usd_foil: null, usd_etched: null }, ...extra }) as ScryCard;
+  const entry = (id: string, printingId?: string) => ({ entry: { card: { oracleId: id, name: `Card ${id}` }, qty: 1, ...(printingId ? { printingId } : {}) }, isCommander: false });
+  /** Enough cards for two searches (a search holds about 17). */
+  const many = Array.from({ length: 30 }, (_, i) => `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`);
+  const asked = (path: string) => [...(new URLSearchParams(path.split('?')[1]).get('q') ?? '').matchAll(/oracleid:([\w-]+)/g)].map((m) => m[1]);
+
+  function stub(o: { search?: (ids: string[]) => ScryCard[]; collection?: (body: { identifiers: Array<Record<string, string>> }) => unknown } = {}) {
+    const calls: string[] = [];
+    const client = {
+      get: async <T,>(path: string) => {
+        calls.push(`GET ${path}`);
+        return { object: 'list', data: (o.search ?? ((ids) => ids.map((id) => card(id, '1.00'))))(asked(path)) } as T;
+      },
+      post: async <T,>(path: string, body: unknown) => {
+        calls.push(`POST ${path} ${JSON.stringify(body)}`);
+        if (!o.collection) throw new Error('unexpected lookup');
+        return o.collection(body as { identifiers: Array<Record<string, string>> }) as T;
+      },
+    };
+    return { client, calls };
+  }
+
+  it('still prices the rest of the deck when one search fails, and marks the cards it could not price', async () => {
+    const { client } = stub({
+      search: (ids) => {
+        if (ids.includes(many[0])) throw new ScryfallError(0, 'offline');
+        return ids.map((id) => card(id, '2.00'));
+      },
+      collection: () => ({ object: 'list', data: [card(many[0], '9.99')] }),
+    });
+    const priced = await priceEntries(client, many.map((id) => entry(id)));
+    const failed = priced.filter((p) => p.failed);
+    expect(failed.length).toBeGreaterThan(0);
+    expect(failed.length).toBeLessThan(30);
+    expect(priced.at(-1)).toMatchObject({ price: 2, card: { oracle_id: many[29] } });
+    // A card whose price didn't load keeps its name and type (from a plain lookup) but never shows that lookup's price.
+    expect(priced[0]).toMatchObject({ failed: true, price: null, cheapest: null, card: { oracle_id: many[0] }, typeLine: 'Creature' });
+    expect(priced[1]).toMatchObject({ failed: true, price: null, card: null });
+  });
+
+  it('throws when nothing at all could be loaded, so the screen can say Scryfall is unreachable', async () => {
+    const { client } = stub({ search: () => { throw new ScryfallError(0, 'offline'); } });
+    await expect(priceEntries(client, [entry('a'), entry('b')])).rejects.toThrow();
+  });
+
+  it('keeps a just-added card in the list, unpriced, when its price cannot be loaded', async () => {
+    const { client, calls } = stub({ search: () => { throw new ScryfallError(0, 'offline'); } });
+    const [p] = await priceEntries(client, [entry('a')], undefined, new Map([['a', card('a', '5.00')]]));
+    expect(p).toMatchObject({ failed: true, price: null, card: { oracle_id: 'a' } });
+    expect(calls).toHaveLength(1); // the card is already in hand: no second lookup
   });
 
   it('keeps a card with no Scryfall match in the list, unpriced', async () => {
-    const edgarId = '41e2790d-49f5-4e98-b8d9-04179f47f13a';
-    const deck = buildDeck('X', [], { id: 'e', oracle_id: edgarId, name: 'Edgar Markov' } as ScryCard);
-    deck.cards = [{ card: { oracleId: 'gone', name: 'Vanished Card' }, qty: 1 }];
-
-    // This deck makes requests the fixture lacks, so build their replies from recorded data.
-    const recordedCards = Object.values(map).flatMap((r) => (r.body as { data?: ScryCard[] }).data ?? []);
-    const edgarPrints = recordedCards.filter((c) => c.oracle_id === edgarId);
-    const extra: FixtureMap = {
-      [`POST /cards/collection ${JSON.stringify({ identifiers: [{ oracle_id: edgarId }, { oracle_id: 'gone' }] })}`]: {
-        status: 200,
-        body: { object: 'list', not_found: [{ oracle_id: 'gone' }], data: edgarPrints.slice(0, 1) },
-      },
-      [`GET /cards/search?${new URLSearchParams({ q: `(oracleid:${edgarId}) game:paper -st:memorabilia -is:oversized -border:gold`, unique: 'prints', order: 'usd', dir: 'asc' })}`]: {
-        status: 200,
-        body: { object: 'list', has_more: false, data: edgarPrints },
-      },
-    };
-    const fetch = fixtureFetch({ ...map, ...extra });
-
-    const priced = await priceDeck(createClient({ fetch, cache: memoryCache(), spacingMs: 0 }), deck);
-    expect(fetch.misses).toEqual([]);
-    expect(priced[0]).toMatchObject({ price: 29.08 });
+    const { client } = stub({
+      search: (ids) => ids.filter((id) => id !== 'gone').map((id) => card(id, '3.00')),
+      collection: () => ({ object: 'list', not_found: [{ oracle_id: 'gone' }], data: [] }),
+    });
+    const priced = await priceEntries(client, [entry('a'), entry('gone')]);
+    expect(priced[0]).toMatchObject({ price: 3 });
     expect(priced[1]).toMatchObject({ card: null, price: null, url: null });
+    expect(priced[1].failed).toBeUndefined();
     expect(deckTotals(priced.map((p) => ({ qty: p.entry.qty, price: p.price })))).toMatchObject({ unpriced: 1 });
+  });
+
+  it('shows a card that has no paper printing by name and type, unpriced', async () => {
+    const { client, calls } = stub({
+      search: (ids) => ids.filter((id) => id !== 'digital').map((id) => card(id, '3.00')),
+      collection: () => ({ object: 'list', data: [card('digital', '7.00', { type_line: 'Artifact' })] }),
+    });
+    const priced = await priceEntries(client, [entry('a'), entry('digital')]);
+    expect(priced[1]).toMatchObject({ card: { oracle_id: 'digital' }, typeLine: 'Artifact', price: null, cheapest: null });
+    expect(calls.filter((c) => c.startsWith('POST'))).toEqual([`POST /cards/collection ${JSON.stringify({ identifiers: [{ oracle_id: 'digital' }] })}`]);
+  });
+
+  it('looks up every picked printing in one request and prices each card at its own', async () => {
+    const { client, calls } = stub({
+      collection: ({ identifiers }) => ({ object: 'list', data: identifiers.map(({ id }) => card(id.replace('pin-', ''), '8.00', { id })) }),
+    });
+    const priced = await priceEntries(client, [entry('a', 'pin-a'), entry('b', 'pin-b'), entry('c')]);
+    expect(priced.map((p) => [p.card?.id, p.price, p.cheapest?.id])).toEqual([['pin-a', 8, 'print-a'], ['pin-b', 8, 'print-b'], ['print-c', 1, 'print-c']]);
+    expect(calls.filter((c) => c.startsWith('POST'))).toHaveLength(1);
+  });
+
+  it('falls back to the cheapest printing when a picked printing no longer exists or belongs to another card', async () => {
+    const { client } = stub({
+      // "pin-gone" is not found; "pin-b" turns out to be a printing of some other card (a hand-made share link).
+      collection: () => ({ object: 'list', not_found: [{ id: 'pin-gone' }], data: [card('other', '500.00', { id: 'pin-b' })] }),
+    });
+    const priced = await priceEntries(client, [entry('a', 'pin-gone'), entry('b', 'pin-b')]);
+    expect(priced.map((p) => [p.card?.id, p.price])).toEqual([['print-a', 1], ['print-b', 1]]);
+  });
+
+  it('leaves a card unpriced, rather than priced at another printing, when its picked printing cannot be loaded', async () => {
+    const { client } = stub({ collection: () => { throw new ScryfallError(0, 'offline'); } });
+    const priced = await priceEntries(client, [entry('a', 'pin-a'), entry('b')]);
+    expect(priced[0]).toMatchObject({ failed: true, price: null, cheapest: { id: 'print-a' } });
+    expect(priced[1]).toMatchObject({ price: 1 });
+    expect(priced[1].failed).toBeUndefined();
+
+    // Going back to the cheapest printing, which did load, prices the card and clears the failure.
+    const reset = withPrinting(priced[0], undefined);
+    expect(reset).toMatchObject({ price: 1, card: { id: 'print-a' } });
+    expect(reset.failed).toBeUndefined();
+    expect(reset.entry.printingId).toBeUndefined();
   });
 });

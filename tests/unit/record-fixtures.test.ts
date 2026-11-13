@@ -6,7 +6,8 @@ import { autocompleteNames, cardByName, searchCommanders } from '../../src/scryf
 import { buildDeck, commanderCandidates, oracleIdOf, priceDeck, priceEntries, resolveList } from '../../src/scryfall/resolve';
 import { fuzzyCard } from '../../src/scryfall/cards';
 import { deckProfile } from '../../src/lib/profile';
-import { roleLookupNames, scoreEdhrec, scoreSuggestions, tierOf } from '../../src/lib/suggest';
+import { sortPrintings } from '../../src/lib/price';
+import { roleLookupNames, scoreEdhrec, scoreSuggestions } from '../../src/lib/suggest';
 import { candidatePool, deckCardFacts, rulesText } from '../../src/scryfall/suggest';
 import { deckRoles } from '../../src/scryfall/roles';
 import { cheaperReplacements, edhrecKeepScores, swapPairs } from '../../src/lib/swaps';
@@ -17,17 +18,41 @@ import { estimateBracket, type PageFilter } from '../../src/lib/edhrec';
 import type { Deck } from '../../src/lib/deck';
 import { gameChangerCount } from '../../src/scryfall/names';
 import { searchCards } from '../../src/scryfall/browse';
-import { cardsByOracleId, printings } from '../../src/scryfall/cards';
+import { cardsByOracleId, cheapestPrintings, printings } from '../../src/scryfall/cards';
 import { SORTS } from '../../src/lib/browse';
 import { pageRoles, scoredPage } from '../support/swap-pool';
 import { BREYA } from '../support/swap-samples';
 import { BASIC_SWAMP_QUERY, COMMANDER_TYPED, SAMPLES, SOLPHIM_TYPED } from '../support/browse-samples';
 
+const FILL = process.env.RECORD === 'fill';
+const fixture = (file: string): FixtureMap => JSON.parse(readFileSync(new URL(`../fixtures/${file}`, import.meta.url), 'utf8'));
+
+/**
+ * RECORD=fill, for when the app starts making different requests: a request the fixture already holds is
+ * answered from it (so its recorded prices and suggestions stay as they are) and only a request it lacks
+ * goes to the real API. Requests the flow no longer makes are dropped, since `map` holds only what this
+ * run asked for. With RECORD=1 everything is asked afresh.
+ */
+function fill(file: string, map: FixtureMap, live: typeof fetch, alsoRecordedIn: string[] = []): typeof fetch {
+  if (!FILL) return live;
+  const old = fixture(file);
+  // Replies another fixture holds for this flow (its later, wider searches) are used but stay in that file.
+  const elsewhere: FixtureMap = Object.assign({}, ...alsoRecordedIn.map(fixture));
+  const reply = (hit: FixtureMap[string]) => new Response(JSON.stringify(hit.body), { status: hit.status, headers: { 'content-type': 'application/json' } });
+  return async (input, init) => {
+    const key = requestKey(init?.method ?? 'GET', String(input), init?.body as string | undefined);
+    if (old[key]) return reply((map[key] = old[key]));
+    if (elsewhere[key]) return reply(elsewhere[key]);
+    return live(input, init);
+  };
+}
+
 /**
  * Re-records tests/fixtures/scryfall-e2e.json from the real Scryfall API by running the same flow the
  * paste screen runs on tests/fixtures/e2e-list.txt. Run: RECORD=1 npx vitest run tests/unit/record-fixtures.test.ts
+ * (or RECORD=fill to keep what is recorded and add only the requests that are missing).
  */
-describe.runIf(process.env.RECORD === '1')('record Scryfall fixtures', () => {
+describe.runIf(process.env.RECORD === '1' || FILL)('record Scryfall fixtures', () => {
   it('records the paste-and-price flow', async () => {
     const map: FixtureMap = {};
     const recording: typeof fetch = async (input, init) => {
@@ -37,14 +62,19 @@ describe.runIf(process.env.RECORD === '1')('record Scryfall fixtures', () => {
       map[requestKey(init?.method ?? 'GET', String(input), init?.body as string | undefined)] = { status: res.status, body: trim(body) };
       return res;
     };
-    const client = createClient({ fetch: recording, cache: memoryCache() });
+    const client = createClient({ fetch: fill('scryfall-e2e.json', map, recording), cache: memoryCache() });
 
     const { entries } = parseDeckList(readFileSync(new URL('../fixtures/e2e-list.txt', import.meta.url), 'utf8'));
     const resolved = await resolveList(client, entries);
     // As the user would: accept each suggestion, remove lines with none.
     const lines = resolved.flatMap((r) => (r.card ? [{ entry: r.entry, card: r.card }] : r.suggestion ? [{ entry: r.entry, card: r.suggestion }] : []));
     const [commander] = commanderCandidates(lines);
-    await priceDeck(client, buildDeck('E2E', lines, commander));
+    const deck = buildDeck('E2E', lines, commander);
+    await priceDeck(client, deck);
+    // The printing picker, which the e2e tests open on the commander to pick its second-cheapest printing;
+    // a deck with a picked printing looks that printing up when it is priced again (a reload, a shared link).
+    const second = sortPrintings(await printings(client, oracleIdOf(commander)))[1];
+    await priceDeck(client, { ...deck, commanderPrintingId: second.id });
 
     writeFileSync(new URL('../fixtures/scryfall-e2e.json', import.meta.url), JSON.stringify(map, null, 1) + '\n');
     expect(Object.keys(map).length).toBeGreaterThan(5);
@@ -58,7 +88,7 @@ describe.runIf(process.env.RECORD === '1')('record Scryfall fixtures', () => {
       map[requestKey(init?.method ?? 'GET', String(input), init?.body as string | undefined)] = { status: res.status, body: trim(await res.clone().json()) };
       return res;
     };
-    const client = createClient({ fetch: recording, cache: memoryCache() });
+    const client = createClient({ fetch: fill('scryfall-new-deck.json', map, recording), cache: memoryCache() });
 
     // Same calls, in the same order, as tests/e2e/new-deck.spec.ts makes through the UI.
     const [edgar] = await searchCommanders(client, 'edgar');
@@ -86,18 +116,21 @@ describe.runIf(process.env.RECORD === '1')('record Scryfall fixtures', () => {
       return res;
     };
     const resolver = createClient({ cache: memoryCache(), fetch: (i, init) => fetch(i, { ...init, headers: { ...Object.fromEntries(new Headers(init?.headers)), 'User-Agent': 'Swapsmith-fixture-recorder/0.1' } }) });
-    const client = createClient({ fetch: recording, cache: memoryCache() });
+    const client = createClient({ fetch: fill('scryfall-edgar-full.json', map, recording, ['scryfall-edgar-fallback.json']), cache: memoryCache() });
 
     // Build the deck as a user would (accept every suggestion, look up Immersturm Predator) without recording it:
-    // e2e tests start from this saved deck.
-    const resolved = await resolveList(resolver, parseDeckList(readFileSync(new URL('../fixtures/edgar-list.txt', import.meta.url), 'utf8')).entries);
-    const immersturm = (await fuzzyCard(resolver, 'Immersturm Predator'))!;
-    const lines = resolved.map((r) => ({ entry: r.entry, card: r.card ?? r.suggestion ?? immersturm }));
-    const deck = { ...buildDeck('Edgar Vampires', lines, commanderCandidates(lines)[0], new Date('2026-11-02T00:00:00Z')), id: 'edgarfull' };
+    // e2e tests start from this saved deck. RECORD=fill keeps the deck already saved.
+    const build = async (): Promise<Deck> => {
+      const resolved = await resolveList(resolver, parseDeckList(readFileSync(new URL('../fixtures/edgar-list.txt', import.meta.url), 'utf8')).entries);
+      const immersturm = (await fuzzyCard(resolver, 'Immersturm Predator'))!;
+      const lines = resolved.map((r) => ({ entry: r.entry, card: r.card ?? r.suggestion ?? immersturm }));
+      return { ...buildDeck('Edgar Vampires', lines, commanderCandidates(lines)[0], new Date('2026-11-02T00:00:00Z')), id: 'edgarfull' };
+    };
+    const deck = FILL ? (JSON.parse(readFileSync(new URL('../fixtures/edgar-deck.json', import.meta.url), 'utf8')) as Deck) : await build();
     writeFileSync(new URL('../fixtures/edgar-deck.json', import.meta.url), JSON.stringify(deck, null, 1) + '\n');
 
     // What the deck page does: price it, then Find suggestions, then
-    // add the top pick under $3, apply the first swap, and take the first cheaper replacement. (Same
+    // add a budget creature, apply the first swap, and take the first cheaper replacement. (Same
     // requests as the panel: the pool, then the deck's roles.)
     const priced = await priceDeck(client, deck);
     const commander = priced.find((p) => p.isCommander)!.card!;
@@ -105,7 +138,8 @@ describe.runIf(process.env.RECORD === '1')('record Scryfall fixtures', () => {
     const { pool } = await candidatePool(client, profile);
     const { roles } = await deckRoles(client, priced.filter((c) => !c.isCommander).map((c) => ({ oracleId: c.entry.card.oracleId, name: c.entry.card.name })));
     const scored = scoreSuggestions(pool, { colorIdentity: profile.colorIdentity, oracleIds: new Set(priced.map((p) => p.entry.card.oracleId)) }, new Set());
-    const topBudget = scored.find((s) => tierOf(s.price) === 'budget')!;
+    // The card tests/e2e/suggestions.spec.ts adds by name (a budget creature among the first Creatures upgrades).
+    const topBudget = scored.find((s) => s.card.name === 'Indulgent Aristocrat')!;
     const facts = deckCardFacts(priced, roles, pool, { owned: [], unownedBasics: [] });
     const firstSwap = swapPairs(scored, facts, profile)[0].add.card;
     const firstCheaper = cheaperReplacements(facts, scored)[0].options[0].add.card;
@@ -114,8 +148,9 @@ describe.runIf(process.env.RECORD === '1')('record Scryfall fixtures', () => {
     }
 
     // Suggestion results are only scored and shown, never read for rules text: drop it to keep the fixture small.
+    // (The deck's own prices also use prefer:usd-low, and their rules text is read, so only the pool searches are trimmed.)
     for (const [key, rec] of Object.entries(map)) {
-      if (!key.includes('prefer%3Ausd-low')) continue;
+      if (!key.includes('q=f%3Acommander')) continue;
       for (const c of (rec.body as { data?: Array<Record<string, unknown>> }).data ?? []) {
         delete c.oracle_text;
         for (const f of (c.card_faces as Array<Record<string, unknown>> | undefined) ?? []) delete f.oracle_text;
@@ -136,15 +171,16 @@ describe.runIf(process.env.RECORD === '1')('record Scryfall fixtures', () => {
       map[requestKey(init?.method ?? 'GET', url, init?.body as string | undefined)] = { status: res.status, body: url.startsWith(EDHREC_BASE) ? trimEdhrec(body) : trim(body) };
       return res;
     };
-    const edhrec = createEdhrecClient({ fetch: recording, cache: memoryCache() });
-    const scryfall = createClient({ fetch: recording, cache: memoryCache() });
+    const filled = fill('edhrec-edgar.json', map, recording);
+    const edhrec = createEdhrecClient({ fetch: filled, cache: memoryCache() });
+    const scryfall = createClient({ fetch: filled, cache: memoryCache() });
 
     // What Find suggestions does for the seeded Edgar deck (tests/fixtures/edgar-deck.json): count its
     // Game Changers for the starting bracket, then load the pages tests/e2e/edhrec.spec.ts switches to.
     // Each page's lookups start fresh, so the recording holds every listed card; the e2e mock answers
     // any batch of names from them.
     const seeded = JSON.parse(readFileSync(new URL('../fixtures/edgar-deck.json', import.meta.url), 'utf8')) as Deck;
-    const gameChangers = await gameChangerCount(scryfall, [seeded.commander.name, ...seeded.cards.map((c) => c.card.name)]);
+    const gameChangers = await gameChangerCount(scryfall, [seeded.commander.oracleId, ...seeded.cards.map((c) => c.card.oracleId)]);
     if (gameChangers == null) throw new Error('Game Changer search failed');
     const estimated = estimateBracket(gameChangers);
     console.log(`Edgar deck: ${gameChangers} Game Changers, estimated bracket ${estimated}`);
@@ -163,7 +199,7 @@ describe.runIf(process.env.RECORD === '1')('record Scryfall fixtures', () => {
       if (page.status !== 'ok') throw new Error(`EDHREC page ${JSON.stringify(filter)} failed`);
       for (const c of page.candidates) everyCard.set(oracleIdOf(c.card), c.card.name);
     }
-    // tests/e2e/edhrec.spec.ts adds Herald's Horn, which prices its printings.
+    // tests/e2e/edhrec.spec.ts adds Herald's Horn, which prices it.
     const horn = result.candidates.find((c) => c.card.name === "Herald's Horn")!.card;
     await priceEntries(scryfall, [{ entry: { card: { oracleId: oracleIdOf(horn), name: horn.name }, qty: 1 }, isCommander: false }], undefined, new Map([[oracleIdOf(horn), horn]]));
 
@@ -206,7 +242,7 @@ describe.runIf(process.env.RECORD === '1')('record Scryfall fixtures', () => {
     };
     const full: FixtureMap = JSON.parse(readFileSync(new URL('../fixtures/scryfall-edgar-full.json', import.meta.url), 'utf8'));
     const replay = createClient({ fetch: fixtureFetch(full), cache: memoryCache(), sleep: async () => {} });
-    const client = createClient({ fetch: recording, cache: memoryCache() });
+    const client = createClient({ fetch: fill('scryfall-edgar-fallback.json', map, recording), cache: memoryCache() });
 
     // The deck as the e2e tests price it, then the pool Find builds when EDHREC has nothing.
     const seeded = JSON.parse(readFileSync(new URL('../fixtures/edgar-deck.json', import.meta.url), 'utf8')) as Deck;
@@ -218,7 +254,7 @@ describe.runIf(process.env.RECORD === '1')('record Scryfall fixtures', () => {
     if (failed.length) throw new Error(`searches failed: ${failed.join(', ')}`);
 
     // tests/e2e/suggestions.spec.ts applies the first swap and the first two cheaper options for
-    // Minas Tirith, which price their printings. The deck's roles come from the full recording.
+    // Minas Tirith, which prices them. The deck's roles come from the full recording.
     const { roles } = await deckRoles(replay, priced.filter((c) => !c.isCommander).map((c) => ({ oracleId: c.entry.card.oracleId, name: c.entry.card.name })));
     const facts = deckCardFacts(priced, roles, pool, { owned: [], unownedBasics: [] });
     const scored = scoreSuggestions(pool, { colorIdentity: profile.colorIdentity, oracleIds: new Set(facts.map((c) => c.oracleId)) }, new Set());
@@ -246,7 +282,7 @@ describe.runIf(process.env.RECORD === '1')('record Scryfall fixtures', () => {
       map[requestKey(init?.method ?? 'GET', String(input), init?.body as string | undefined)] = { status: res.status, body: trim(await res.clone().json()) };
       return res;
     };
-    const client = createClient({ fetch: recording, cache: memoryCache() });
+    const client = createClient({ fetch: fill('scryfall-edgar-resolve.json', map, recording), cache: memoryCache() });
     await resolveList(client, parseDeckList(readFileSync(new URL('../fixtures/edgar-list.txt', import.meta.url), 'utf8')).entries);
     writeFileSync(new URL('../fixtures/scryfall-edgar-resolve.json', import.meta.url), JSON.stringify(map, null, 1) + '\n');
     expect(Object.keys(map).length).toBeGreaterThan(2);
@@ -268,8 +304,9 @@ describe.runIf(process.env.RECORD === '1')('record Scryfall fixtures', () => {
       map[requestKey(init?.method ?? 'GET', url, init?.body as string | undefined)] = { status: res.status, body: url.startsWith(EDHREC_BASE) ? trimEdhrec(kept) : trim(kept, { compareFields: true }) };
       return res;
     };
-    const edhrec = createEdhrecClient({ fetch: recording, cache: memoryCache() });
-    const scryfall = createClient({ fetch: recording, cache: memoryCache() });
+    const filled = fill('edhrec-breya.json', map, recording);
+    const edhrec = createEdhrecClient({ fetch: filled, cache: memoryCache() });
+    const scryfall = createClient({ fetch: filled, cache: memoryCache() });
 
     const commander = (await cardByName(scryfall, BREYA.commander))!;
     expect(commander.color_identity).toEqual(BREYA.colorIdentity);
@@ -283,7 +320,7 @@ describe.runIf(process.env.RECORD === '1')('record Scryfall fixtures', () => {
   }, 600_000);
 });
 
-describe.runIf(process.env.RECORD === '1')('record Browse fixtures', () => {
+describe.runIf(process.env.RECORD === '1' || FILL)('record Browse fixtures', () => {
   it('records the Browse searches: every sort, no match, an ignored term, a bad query', async () => {
     const map: FixtureMap = {};
     const recording: typeof fetch = async (input, init) => {
@@ -295,7 +332,7 @@ describe.runIf(process.env.RECORD === '1')('record Browse fixtures', () => {
     };
     // The card detail reads every format's legality; the big searches below only need Commander, which keeps the file small.
     let full = true;
-    const client = createClient({ fetch: recording, cache: memoryCache() });
+    const client = createClient({ fetch: fill('scryfall-browse.json', map, recording), cache: memoryCache() });
     const crypt = 'legal:commander name:"crypt"';
     for (const s of SORTS) await searchCards(client, crypt, s.id, s.descending, 1);
     // The same search the other way round, for the direction toggle.
@@ -315,11 +352,11 @@ describe.runIf(process.env.RECORD === '1')('record Browse fixtures', () => {
     await searchCards(client, sol, 'price', true, 1);
     // One real search per filter (tests/support/browse-samples.ts).
     for (const sample of SAMPLES) await searchCards(client, sample.q, 'popularity', false, 1);
-    // Printings of the cards the e2e tests open in the card detail: Sol Ring (several pages of printings), a spell, and a double-faced card.
+    // The cheapest printing of the cards the e2e tests open in the card detail: Sol Ring (dozens of printings), a spell, and a double-faced card.
     const pick = async (q: string, cardName: string) => (await searchCards(client, q, 'popularity', false, 1)).cards.find((c) => c.name === cardName)!;
     for (const [q, cardName] of [[sol, 'Sol Ring'], [crypt, 'Crypt Ghast'], [crypt, "Agadeem's Awakening // Agadeem, the Undercrypt"]] as const) {
       const card = await pick(q, cardName);
-      await printings(client, card.oracle_id ?? card.card_faces![0].oracle_id!);
+      await cheapestPrintings(client, [card.oracle_id ?? card.card_faces![0].oracle_id!]);
     }
     // Add to deck…: basic lands to repeat, and the commanders New deck… finds and Add to deck… looks up (one lookup per commander, as the app asks).
     await searchCards(client, BASIC_SWAMP_QUERY, 'popularity', false, 1);

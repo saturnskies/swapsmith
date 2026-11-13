@@ -12,16 +12,20 @@ const GROUPS: Array<[string, string]> = [
   ['Land', 'Lands'],
 ];
 export const GROUP_ORDER = ['Commander', ...GROUPS.map(([, g]) => g), 'Other'];
+// Built once: sorting a deck asks for a card's group thousands of times.
+const MATCHERS = GROUPS.map(([type, group]) => ({ type, group, word: new RegExp(`\\b${type}\\b`) }));
+const groupOf = (typeLine: string) => {
+  const front = typeLine.split(' // ')[0];
+  return MATCHERS.find((m) => m.word.test(front));
+};
 
 /** The singular type name for a list row, e.g. "Creature". */
 export function typeName(typeLine: string): string {
-  const front = typeLine.split(' // ')[0];
-  return GROUPS.find(([t]) => new RegExp(`\\b${t}\\b`).test(front))?.[0] ?? 'Other';
+  return groupOf(typeLine)?.type ?? 'Other';
 }
 
 export function typeGroup(typeLine: string): string {
-  const front = typeLine.split(' // ')[0];
-  return GROUPS.find(([t]) => new RegExp(`\\b${t}\\b`).test(front))?.[1] ?? 'Other';
+  return groupOf(typeLine)?.group ?? 'Other';
 }
 
 export type SortKey = 'type' | 'name' | 'price';

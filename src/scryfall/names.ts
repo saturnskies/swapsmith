@@ -60,14 +60,18 @@ export async function cardsByNames(
 }
 
 /**
- * How many of these cards are on Scryfall's Game Changers list (`is:gamechanger`, 53 cards on
- * 2026-11-03), for the bracket estimate. Null when any batch fails, so a partial count never guesses
- * a bracket too low.
+ * How many of these cards (by Oracle ID) are on Scryfall's Game Changers list (`is:gamechanger`, 53
+ * cards on 2026-11-12), for the bracket estimate. The whole list is one cached request shared by
+ * every deck, instead of a search over each deck's names. Null when the list can't be read in full,
+ * so a partial count never guesses a bracket too low.
  */
-export async function gameChangerCount(client: ScryfallClient, names: string[]): Promise<number | null> {
+export async function gameChangerCount(client: ScryfallClient, oracleIds: string[]): Promise<number | null> {
   try {
-    const { cards, failed } = await cardsByNames(client, names, 'is:gamechanger');
-    return failed ? null : cards.size;
+    const res = await client.get<ScryList<ScryCard>>(`/cards/search?${new URLSearchParams({ q: 'is:gamechanger' })}`);
+    // More than a page (175) of Game Changers, or a term Scryfall ignored, is not the list we know how to read.
+    if (res.has_more || res.warnings?.length || !Array.isArray(res.data)) return null;
+    const listed = new Set(res.data.map((c) => c.oracle_id ?? c.card_faces?.[0]?.oracle_id));
+    return new Set(oracleIds.filter((id) => listed.has(id))).size;
   } catch {
     return null;
   }

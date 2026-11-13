@@ -172,9 +172,9 @@ test('Swap replaces the tapped card, closes the dialog and offers Undo', async (
   // The panel's own offer is gone too.
   await showPane(page, 'Suggestions');
   await expect(suggestionsPanel(page)).not.toContainText('Swapped ');
-  // Pricing the swapped-in card asks for its printings, which the Edgar recordings hold only for cards in the deck; the
-  // app prices the card it already has when that fails. Nothing else may go unrecorded.
-  expect(misses.filter((m) => !m.includes('unique=prints'))).toEqual([]);
+  // Pricing the swapped-in card asks for its cheapest printing, which the Edgar recordings hold only for cards in the
+  // deck; the app keeps the card it already has, unpriced, when that fails. Nothing else may go unrecorded.
+  expect(misses.filter((m) => !m.includes('prefer%3Ausd-low&unique=cards'))).toEqual([]);
 });
 
 test("Undo in the Suggestions panel also ends the Cards pane's offer", async ({ page }) => {

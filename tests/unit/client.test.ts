@@ -274,6 +274,151 @@ describe('Scryfall client', () => {
   });
 });
 
+describe('sharing a request between callers', () => {
+  it('sends one request when the same thing is asked for twice at once, and both callers get the reply', async () => {
+    const clock = fakeClock();
+    const f = fakeFetch([json({ name: 'Sol Ring' })]);
+    const client = createClient({ fetch: f.fn, cache: memoryCache(), now: clock.now, sleep: clock.sleep });
+
+    const [a, b] = await Promise.all([client.get('/cards/named?exact=Sol+Ring'), client.get('/cards/named?exact=Sol+Ring')]);
+
+    expect(a).toEqual({ name: 'Sol Ring' });
+    expect(b).toEqual({ name: 'Sol Ring' });
+    expect(f.calls).toHaveLength(1);
+  });
+
+  it('does not share between different requests, or between POSTs with different bodies', async () => {
+    const clock = fakeClock();
+    const f = fakeFetch([json({ n: 1 }), json({ n: 2 }), json({ n: 3 }), json({ n: 4 })]);
+    const client = createClient({ fetch: f.fn, cache: memoryCache(), now: clock.now, sleep: clock.sleep });
+
+    await Promise.all([client.get('/a'), client.get('/b'), client.post('/c', { x: 1 }), client.post('/c', { x: 2 })]);
+
+    expect(f.calls).toHaveLength(4);
+  });
+
+  it('shares a failure too, and asks again on the next call', async () => {
+    const clock = fakeClock();
+    const f = fakeFetch([json(notFound, 404), json({ name: 'Kalastria Highborn' })]);
+    const client = createClient({ fetch: f.fn, cache: memoryCache(), now: clock.now, sleep: clock.sleep });
+
+    const both = await Promise.allSettled([client.get('/x'), client.get('/x')]);
+    expect(both.map((r) => r.status)).toEqual(['rejected', 'rejected']);
+    expect(f.calls).toHaveLength(1);
+
+    await expect(client.get('/x')).resolves.toEqual({ name: 'Kalastria Highborn' });
+    expect(f.calls).toHaveLength(2);
+  });
+});
+
+describe('saved replies when the host cannot be reached', () => {
+  const HOUR = 60 * 60 * 1000;
+  const down = () => { throw new TypeError('Failed to fetch'); };
+  /** A client whose first request succeeds and whose later ones get `then`. */
+  function setup(then: () => Response, opts: { offline?: boolean } = {}) {
+    const clock = fakeClock();
+    const f = fakeFetch([json({ v: 'saved' }), then]);
+    const states: string[] = [];
+    const client = createClient({ fetch: f.fn, cache: memoryCache(), now: clock.now, sleep: clock.sleep, onNetwork: (s) => states.push(s), offline: () => !!opts.offline && f.calls.length > 0 });
+    return { clock, f, states, client };
+  }
+
+  it('uses a saved reply past its TTL when the network is down, after the usual retries, and says so', async () => {
+    const { clock, f, states, client } = setup(down);
+    await client.get('/x');
+    clock.advance(25 * HOUR);
+
+    await expect(client.get('/x')).resolves.toEqual({ v: 'saved' });
+    expect(f.calls).toHaveLength(1 + 4); // the first request, then one try and three retries
+    expect(states).toEqual(['live', 'saved']);
+  });
+
+  it('uses the saved reply at once, without trying the network, when the device says it is offline', async () => {
+    const { clock, f, states, client } = setup(down, { offline: true });
+    await client.get('/x');
+    clock.advance(25 * HOUR);
+
+    await expect(client.get('/x')).resolves.toEqual({ v: 'saved' });
+    expect(f.calls).toHaveLength(1);
+    expect(clock.sleeps).toEqual([]);
+    expect(states).toEqual(['live', 'saved']);
+  });
+
+  it('still asks the network when offline is reported but nothing is saved, and fails as before', async () => {
+    const clock = fakeClock();
+    const f = fakeFetch([down]);
+    const client = createClient({ fetch: f.fn, cache: memoryCache(), now: clock.now, sleep: clock.sleep, offline: () => true, maxRetries: 0 });
+    await expect(client.get('/x')).rejects.toMatchObject({ status: 0 });
+  });
+
+  it('uses a saved reply when the host answers with a server error or keeps rate-limiting', async () => {
+    for (const status of [503, 429]) {
+      const { clock, states, client } = setup(json({ details: 'no' }, status));
+      await client.get('/x');
+      clock.advance(25 * HOUR);
+      await expect(client.get('/x')).resolves.toEqual({ v: 'saved' });
+      expect(states.at(-1)).toBe('saved');
+    }
+  });
+
+  it('does not put a saved reply in place of a real answer such as "not found"', async () => {
+    const { clock, client } = setup(json(notFound, 404));
+    await client.get('/x');
+    clock.advance(25 * HOUR);
+    await expect(client.get('/x')).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('never uses a saved reply older than a week', async () => {
+    const { clock, client } = setup(down);
+    await client.get('/x');
+    clock.advance(8 * 24 * HOUR);
+    await expect(client.get('/x')).rejects.toMatchObject({ status: 0 });
+  });
+
+  it('reports live again once the host answers, and saves the fresh reply', async () => {
+    const clock = fakeClock();
+    const f = fakeFetch([json({ v: 1 }), down, down, down, down, json({ v: 2 })]);
+    const states: string[] = [];
+    const client = createClient({ fetch: f.fn, cache: memoryCache(), now: clock.now, sleep: clock.sleep, onNetwork: (s) => states.push(s) });
+    await client.get('/x');
+    clock.advance(25 * HOUR);
+    await client.get('/x');
+    await expect(client.get('/x')).resolves.toEqual({ v: 2 });
+    expect(states).toEqual(['live', 'saved', 'live']);
+  });
+});
+
+describe('deleting old saved replies', () => {
+  const DAY = 24 * 60 * 60 * 1000;
+
+  it('deletes replies saved more than a week ago after the first fresh reply of a session, and keeps newer ones', async () => {
+    const clock = fakeClock(100 * DAY);
+    const cache = memoryCache();
+    await cache.set('GET /ancient', { t: clock.now() - 8 * DAY, body: 1 });
+    await cache.set('GET /recent', { t: clock.now() - 6 * DAY, body: 2 });
+    const f = fakeFetch([json({ ok: true })]);
+    const client = createClient({ fetch: f.fn, cache, now: clock.now, sleep: clock.sleep });
+
+    await client.get('/x');
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(await cache.get('GET /ancient')).toBeUndefined();
+    expect(await cache.get('GET /recent')).toEqual({ t: clock.now() - 6 * DAY, body: 2 });
+    expect(await cache.get('GET /x')).toBeDefined();
+  });
+
+  it('works with a cache that cannot delete, and when deleting fails', async () => {
+    const clock = fakeClock();
+    const plain = memoryCache();
+    const noPrune = { get: plain.get, set: plain.set };
+    const failing = { ...plain, prune: async () => { throw new Error('blocked'); } };
+    for (const cache of [noPrune, failing]) {
+      const client = createClient({ fetch: fakeFetch([json({ ok: true })]).fn, cache, now: clock.now, sleep: clock.sleep });
+      await expect(client.get('/x')).resolves.toEqual({ ok: true });
+    }
+  });
+});
+
 describe.runIf(process.env.SCRYFALL_LIVE === '1')('live Scryfall (SCRYFALL_LIVE=1)', () => {
   it('fetches a real card and a real 404', async () => {
     // Scryfall rejects Node's default User-Agent; browsers send their own, which it accepts.
@@ -294,5 +439,37 @@ describe('idbCache', () => {
 
     expect(await cache.get('k')).toEqual({ t: 5, body: { a: 1 } });
     expect(await cache.get('missing')).toBeUndefined();
+  });
+
+  it('deletes entries saved before a cutoff and keeps the rest', async () => {
+    const cache = idbCache('swapsmith-test-prune');
+    await cache.set('old', { t: 10, body: 'old' });
+    await cache.set('edge', { t: 20, body: 'edge' });
+    await cache.set('new', { t: 30, body: 'new' });
+
+    await cache.prune!(20);
+
+    expect(await cache.get('old')).toBeUndefined();
+    expect(await cache.get('edge')).toEqual({ t: 20, body: 'edge' });
+    expect(await cache.get('new')).toEqual({ t: 30, body: 'new' });
+  });
+
+  it('drops what the first version of the cache saved, which could never be deleted', async () => {
+    // Version 1: the same store, no index, megabytes of printings per deck.
+    await new Promise<void>((resolve, reject) => {
+      const req = indexedDB.open('swapsmith-test-v1', 1);
+      req.onupgradeneeded = () => req.result.createObjectStore('responses');
+      req.onsuccess = () => {
+        const t = req.result.transaction('responses', 'readwrite');
+        t.objectStore('responses').put({ t: 1, body: 'legacy' }, 'GET /legacy');
+        t.oncomplete = () => (req.result.close(), resolve());
+      };
+      req.onerror = () => reject(req.error);
+    });
+
+    const cache = idbCache('swapsmith-test-v1');
+    expect(await cache.get('GET /legacy')).toBeUndefined();
+    await cache.set('k', { t: 5, body: 1 });
+    expect(await cache.get('k')).toEqual({ t: 5, body: 1 });
   });
 });

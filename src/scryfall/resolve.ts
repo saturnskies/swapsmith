@@ -1,7 +1,7 @@
 import { mergeEntries, newDeckId, type Deck, type DeckEntry } from '../lib/deck';
 import type { ParsedLine } from '../lib/parse';
-import { bestPrice, cheapestPrinting, tcgplayerUrl, type Finish } from '../lib/price';
-import { cardById, cardsByOracleId, fuzzyCard, lookupEntries, looseName, matchesName, printings, printingsForMany } from './cards';
+import { bestPrice, tcgplayerUrl, type Finish } from '../lib/price';
+import { cardsByOracleId, cardsByPrintingId, cheapestPrintings, fuzzyCard, lookupEntries, looseName, matchesName } from './cards';
 import type { ScryfallClient } from './client';
 import type { ScryCard } from './types';
 
@@ -80,29 +80,35 @@ export interface PricedCard {
   isCommander: boolean;
   /** The printing that is priced: the pinned one, else the cheapest. Null if Scryfall has no such card. */
   card: ScryCard | null;
+  /** Scryfall's lowest-priced paper printing, for going back from a pinned one. Null when the card has none or it couldn't be loaded. */
+  cheapest: ScryCard | null;
   typeLine: string;
   price: number | null;
   finish: Finish | null;
   url: string | null;
-  /** Every paper printing found, for the printing picker (basic lands: the cheapest 175). */
-  prints: ScryCard[];
-  /** True when Scryfall couldn't be reached for this card's printings; reloading may fix it. */
+  /** True when Scryfall couldn't be reached for this card's price; reloading may fix it. */
   failed?: boolean;
 }
 
-/** Prices a card at a chosen printing (or the cheapest when none is chosen), from printings already loaded. */
-export function withPrinting(p: PricedCard, printingId: string | undefined): PricedCard {
-  const entry: DeckEntry = { ...p.entry };
-  if (printingId) entry.printingId = printingId;
-  else delete entry.printingId;
-  const pinned = printingId ? p.prints.find((c) => c.id === printingId) : undefined;
-  const pick = pinned ? { card: pinned, ...(bestPrice(pinned) ?? { price: null, finish: null }) } : cheapestPrinting(p.prints);
-  if (!pick) return { ...p, entry, price: null, finish: null };
-  const finish = pick.finish as Finish | null;
-  return { ...p, entry, card: pick.card, typeLine: typeLineOf(pick.card), price: pick.price as number | null, finish, url: tcgplayerUrl(pick.card, finish ?? 'nonfoil') };
+/** A card at one printing, priced at that printing's cheapest finish. */
+function at(printing: ScryCard): Pick<PricedCard, 'card' | 'typeLine' | 'price' | 'finish' | 'url'> {
+  const best = bestPrice(printing);
+  return { card: printing, typeLine: typeLineOf(printing), price: best?.price ?? null, finish: best?.finish ?? null, url: tcgplayerUrl(printing, best?.finish ?? 'nonfoil') };
 }
 
-/** Prices every card in a deck at its pinned or cheapest printing. Reports progress per card. */
+/** Prices a card at a chosen printing, or back at the cheapest when none is given. */
+export function withPrinting(p: PricedCard, printing: ScryCard | undefined): PricedCard {
+  const entry: DeckEntry = { ...p.entry };
+  if (printing) entry.printingId = printing.id;
+  else delete entry.printingId;
+  const pick = printing ?? p.cheapest;
+  if (!pick) return { ...p, entry, price: null, finish: null };
+  // The printing is in hand, so whatever failed to load before no longer applies.
+  const { failed: _failed, ...rest } = p;
+  return { ...rest, entry, ...at(pick) };
+}
+
+/** Prices every card in a deck at its pinned or cheapest printing. Reports progress as cards are priced. */
 export function priceDeck(client: ScryfallClient, deck: Deck, onProgress?: (done: number, total: number) => void): Promise<PricedCard[]> {
   return priceEntries(
     client,
@@ -115,8 +121,11 @@ export function priceDeck(client: ScryfallClient, deck: Deck, onProgress?: (done
 }
 
 /**
- * Prices deck entries. `known` holds card objects already fetched (say, a card just added by name),
- * which saves looking them up again.
+ * Prices deck entries: one search per ~15 cards for each card's cheapest paper printing, plus one
+ * lookup for the printings users pinned (ADR-006). A batch that fails leaves its cards in the list,
+ * unpriced and marked `failed`; this throws only when nothing could be loaded at all. `known` holds
+ * card objects already fetched (say, a card just added by name), shown when a card has no paper
+ * printing or its price couldn't be loaded.
  */
 export async function priceEntries(
   client: ScryfallClient,
@@ -124,58 +133,32 @@ export async function priceEntries(
   onProgress: (done: number, total: number) => void = () => {},
   known: Map<string, ScryCard> = new Map(),
 ): Promise<PricedCard[]> {
-  const missing = all.map((x) => x.entry.card.oracleId).filter((id) => !known.has(id));
-  const base = new Map([...known, ...(await cardsByOracleId(client, missing))]);
+  const ids = [...new Set(all.map((x) => x.entry.card.oracleId))];
+  const pinnedIds = all.flatMap((x) => (x.entry.printingId ? [x.entry.printingId] : []));
   let done = 0;
-  onProgress(0, all.length);
+  onProgress(0, ids.length);
 
-  // Non-basic cards share a few batched searches; each basic land gets its own price-filtered one.
-  const isBasic = (id: string) => /\bBasic\b/.test(base.get(id)?.type_line ?? '');
-  const ids = [...base.keys()];
-  const shared = printingsForMany(client, ids.filter((id) => !isBasic(id)));
-  const printingsOf = async (id: string): Promise<ScryCard[]> => {
-    if (isBasic(id)) return printings(client, id);
-    const found = (await shared).get(id);
-    if (!found) throw new Error('printings unavailable');
-    return found;
-  };
+  const [cheap, pinned] = await Promise.all([
+    cheapestPrintings(client, ids, (batch) => onProgress((done += batch.length), ids.length)),
+    // Null when the pinned printings couldn't be loaded: those cards are then unpriced, not priced at another printing.
+    cardsByPrintingId(client, pinnedIds).catch(() => null),
+  ]);
+  const unseen = ids.filter((id) => !cheap.cards.has(id) && !known.has(id));
+  if (ids.length && cheap.failed.size === ids.length && unseen.length === ids.length) throw new Error('prices unavailable');
+  // Cards with no paper printing (or whose batch failed) still show by name and type when Scryfall knows them.
+  const others = unseen.length ? await cardsByOracleId(client, unseen).catch(() => new Map<string, ScryCard>()) : new Map<string, ScryCard>();
 
-  return Promise.all(
-    all.map(async ({ entry, isCommander }): Promise<PricedCard> => {
-      const known = base.get(entry.card.oracleId) ?? null;
-      let chosen: ScryCard | null = known;
-      let price: number | null = null;
-      let finish: Finish | null = null;
-
-      let failed = false;
-      let prints: ScryCard[] = [];
-      if (known) {
-        try {
-          prints = await printingsOf(entry.card.oracleId);
-          let pinned = entry.printingId ? (prints.find((p) => p.id === entry.printingId) ?? null) : null;
-          if (entry.printingId && !pinned) {
-            pinned = await cardById(client, entry.printingId);
-            if (pinned) prints = [...prints, pinned];
-          }
-          if (pinned) {
-            chosen = pinned;
-            const p = bestPrice(pinned);
-            if (p) ({ price, finish } = p);
-          } else {
-            const cheapest = cheapestPrinting(prints);
-            if (cheapest) ({ card: chosen, price, finish } = cheapest);
-          }
-        } catch {
-          // Keep the card in the list, unpriced, rather than failing the whole deck.
-          failed = true;
-        }
-      }
-
-      done += 1;
-      onProgress(done, all.length);
-      const priced: PricedCard = { entry, isCommander, card: chosen, typeLine: chosen ? typeLineOf(chosen) : '', price, finish, url: chosen ? tcgplayerUrl(chosen, finish ?? 'nonfoil') : null, prints };
-      if (failed) priced.failed = true;
-      return priced;
-    }),
-  );
+  return all.map(({ entry, isCommander }): PricedCard => {
+    const id = entry.card.oracleId;
+    const cheapest = cheap.cards.get(id) ?? null;
+    const shown = cheapest ?? known.get(id) ?? others.get(id) ?? null;
+    const found = entry.printingId ? pinned?.get(entry.printingId) : undefined;
+    // A pinned printing of another card (a hand-made share link) is ignored, like one that no longer exists.
+    const pin = found && oracleIdOf(found) === id ? found : undefined;
+    const failed = cheap.failed.has(id) || (!!entry.printingId && pinned === null);
+    const unpriced = { card: shown, typeLine: shown ? typeLineOf(shown) : '', price: null, finish: null, url: shown ? tcgplayerUrl(shown, 'nonfoil') : null };
+    const priced: PricedCard = { entry, isCommander, cheapest, ...(failed ? unpriced : pin ? at(pin) : cheapest ? at(cheapest) : unpriced) };
+    if (failed) priced.failed = true;
+    return priced;
+  });
 }

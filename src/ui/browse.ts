@@ -1,9 +1,9 @@
 import { addCardToDeck, allFormats, buildQuery, COLORS, defaultFilters, canBeCommander, checkAdd, legalityLabel, loadPrefs, realOracleId, RARITIES, savePrefs, SORTS, type ColorMode, type Field, type Filters, type SortKey } from '../lib/browse';
 import { cardImage } from '../lib/groups';
-import { bestPrice, cheapestPrinting, tcgplayerUrl } from '../lib/price';
+import { bestPrice, tcgplayerUrl } from '../lib/price';
 import { THEMES } from '../lib/profile';
 import { searchCards, type SearchPage } from '../scryfall/browse';
-import { cardsByOracleId, printings, searchCommanders } from '../scryfall/cards';
+import { cardsByOracleId, cheapestPrintings, searchCommanders } from '../scryfall/cards';
 import { ScryfallError } from '../scryfall/client';
 import { POOL_ROLES } from '../scryfall/roles';
 import { buildDeck, oracleIdOf } from '../scryfall/resolve';
@@ -242,7 +242,7 @@ export function renderBrowse(view: HTMLElement, ctx: AppContext, storage: Storag
   // ---- Card detail ----------------------------------------------------------------------------
   /**
    * A modal with the card's picture, rules, legality and price, and actions. Each open builds its own
-   * dialog, so a slow printings reply for a card that was closed can only touch that card's own dialog.
+   * dialog, so a slow price reply for a card that was closed can only touch that card's own dialog.
    */
   function openDetail(card: ScryCard, from: HTMLElement) {
     const faces = card.card_faces && card.card_faces.length > 1 ? card.card_faces : null;
@@ -282,16 +282,17 @@ export function renderBrowse(view: HTMLElement, ctx: AppContext, storage: Storag
     const oid = realOracleId(card);
     if (oid) {
       priceNote.textContent = 'Checking other printings…';
-      printings(ctx.client, oid).then(
-        (prints) => {
-          const best = cheapestPrinting(prints);
-          if (best) {
-            showPrice('Cheapest printing: ', best.price, tcgplayerUrl(best.card, best.finish));
-            priceNote.textContent = `${best.card.set_name} #${best.card.collector_number}${best.finish === 'nonfoil' ? '' : `, ${best.finish}`}`;
-          } else priceNote.textContent = 'No printing has a price.';
-        },
-        () => (priceNote.textContent = "Couldn't check other printings, so this is the price of the version shown."),
-      );
+      // The same one-request lookup a deck is priced with (ADR-006), so Browse and the deck agree on "cheapest".
+      const unchecked = () => (priceNote.textContent = "Couldn't check other printings, so this is the price of the version shown.");
+      cheapestPrintings(ctx.client, [oid]).then(({ cards, failed }) => {
+        if (failed.size) return unchecked();
+        const cheapest = cards.get(oid);
+        const best = cheapest ? bestPrice(cheapest) : null;
+        if (cheapest && best) {
+          showPrice('Cheapest printing: ', best.price, tcgplayerUrl(cheapest, best.finish));
+          priceNote.textContent = `${cheapest.set_name} #${cheapest.collector_number}${best.finish === 'nonfoil' ? '' : `, ${best.finish}`}`;
+        } else priceNote.textContent = 'No printing has a price.';
+      }, unchecked);
     } else priceNote.textContent = '';
 
 

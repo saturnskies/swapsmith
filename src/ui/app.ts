@@ -1,7 +1,7 @@
 import type { Deck } from '../lib/deck';
 import { browserStorage, loadStore, saveStore, type Store } from '../lib/storage';
 import { createEdhrecClient } from '../edhrec/page';
-import { createClient, type ScryfallClient } from '../scryfall/client';
+import { createClient, type NetworkState, type ScryfallClient } from '../scryfall/client';
 import { renderDeck, renderShared } from './deckView';
 import { lifeRoute, tabOf, type Tab } from '../lib/nav';
 import { renderBrowse } from './browse';
@@ -46,8 +46,16 @@ export function startApp(root: HTMLElement): void {
 
   let active: Tab | null = null;
 
+  // Said above every tab while prices come from copies saved on this device because Scryfall can't be reached
+  // (offline at a game table), and withdrawn as soon as it answers again. Empty, it stays in the page for
+  // screen readers but takes no room (ui-state rules).
+  const savedNote = h('p', { class: 'notice', role: 'status', 'data-testid': 'saved-prices' });
+  const onNetwork = (state: NetworkState) => {
+    savedNote.textContent = state === 'saved' ? "Can't reach Scryfall, so these are the prices saved on this device earlier. They may be out of date." : '';
+  };
+
   const ctx: AppContext = {
-    client: createClient(),
+    client: createClient({ onNetwork }),
     edhrec: createEdhrecClient(),
     store,
     persistent,
@@ -99,7 +107,7 @@ export function startApp(root: HTMLElement): void {
     life: h('div', { class: 'view', 'data-tab': 'life' }),
   };
   const view = views.decks;
-  root.replaceChildren(...(banner ? [banner] : []), ...Object.values(views));
+  root.replaceChildren(...(banner ? [banner] : []), savedNote, ...Object.values(views));
   const bar = createTabBar();
   document.body.append(bar.el);
   renderBrowse(views.browse, ctx, storage);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bestPrice, cheapestPrinting, sortPrintings, tcgplayerUrl } from '../../src/lib/price';
+import { bestPrice, sortPrintings, tcgplayerUrl } from '../../src/lib/price';
 import type { ScryCard } from '../../src/scryfall/types';
 
 const card = (over: Omit<Partial<ScryCard>, 'prices'> & { prices?: Partial<ScryCard['prices']> }): ScryCard => ({
@@ -33,27 +33,6 @@ describe('bestPrice', () => {
 
   it('ignores unparseable or zero prices', () => {
     expect(bestPrice(card({ prices: { usd: 'abc', usd_foil: '0.00', usd_etched: '2.50' } }))).toEqual({ price: 2.5, finish: 'etched' });
-  });
-});
-
-describe('cheapestPrinting', () => {
-  it('chooses the printing with the lowest price across finishes', () => {
-    const prints = [
-      card({ id: 'a', prices: { usd: '1.10' } }),
-      card({ id: 'b', prices: { usd: '2.00', usd_foil: '0.85' } }),
-      card({ id: 'c', prices: {} }),
-    ];
-    expect(cheapestPrinting(prints)).toMatchObject({ card: { id: 'b' }, price: 0.85, finish: 'foil' });
-  });
-
-  it('keeps the first printing on equal prices', () => {
-    const prints = [card({ id: 'a', prices: { usd: '0.10' } }), card({ id: 'b', prices: { usd: '0.10' } })];
-    expect(cheapestPrinting(prints)?.card.id).toBe('a');
-  });
-
-  it('returns null when nothing is priced', () => {
-    expect(cheapestPrinting([card({})])).toBeNull();
-    expect(cheapestPrinting([])).toBeNull();
   });
 });
 

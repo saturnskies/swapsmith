@@ -1,6 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { flows, mockScryfall, pasteAndFix } from './helpers';
-import { requestKey } from '../support/fixtures';
+import { mockScryfall, pasteAndFix } from './helpers';
 
 test('share a deck by link; a friend sees it read-only and can save a copy', async ({ page, browser }) => {
   await mockScryfall(page);
@@ -9,7 +8,7 @@ test('share a deck by link; a friend sees it read-only and can save a copy', asy
   await page.getByRole('checkbox', { name: 'Own Sol Ring' }).check();
   await page.getByRole('button', { name: 'Change printing of Edgar Markov' }).click();
   await page.getByRole('dialog').getByRole('listitem').nth(1).getByRole('button', { name: 'Use this printing' }).click();
-  await expect(page.getByTestId('deck-total')).toHaveText('$39.93');
+  await expect(page.getByTestId('deck-total')).toHaveText('$40.77');
 
   await page.getByRole('button', { name: 'Share & export' }).click();
   await page.getByRole('dialog', { name: 'Share & export' }).getByRole('button', { name: 'Copy share link' }).click();
@@ -20,14 +19,12 @@ test('share a deck by link; a friend sees it read-only and can save a copy', asy
   // A friend: a brand-new browser profile with nothing saved.
   const friendCtx = await browser.newContext();
   const friend = await friendCtx.newPage();
-  // The home page asks for the picked commander printing's art; answer it so no request goes unrecorded.
-  const artKey = requestKey('POST', 'https://api.scryfall.com/cards/collection', JSON.stringify({ identifiers: [{ id: '089b6e6f-c178-4612-866f-da9cbc01b442' }] }));
-  const artReply = { status: 200, body: { object: 'list', not_found: [], data: [{ object: 'card', id: '089b6e6f-c178-4612-866f-da9cbc01b442', name: 'Edgar Markov', image_uris: { art_crop: 'https://cards.scryfall.io/art_crop/test.jpg' } }] } };
-  const misses = await mockScryfall(friend, { ...flows, [artKey]: artReply });
+  // Pricing the shared deck looks up the picked commander printing, as the home page later does for its art (recorded).
+  const misses = await mockScryfall(friend);
   await friend.goto(link);
   await expect(friend.getByRole('heading', { level: 2, name: 'Edgar to share' })).toBeVisible();
   await expect(friend.getByText('A shared deck.')).toBeVisible();
-  await expect(friend.getByTestId('deck-total')).toHaveText('$39.93');
+  await expect(friend.getByTestId('deck-total')).toHaveText('$40.77');
   await expect(friend.getByRole('row').filter({ hasText: 'Edgar Markov' })).toContainText('INR #328');
   // A shared deck has no suggestions, so a card's name stays a TCGplayer link instead of opening the card dialog.
   await expect(friend.getByRole('row').filter({ hasText: 'Sol Ring' }).getByRole('link', { name: 'Sol Ring' })).toHaveAttribute('href', /^https:\/\/www\.tcgplayer\.com\/product\/\d+$/);
