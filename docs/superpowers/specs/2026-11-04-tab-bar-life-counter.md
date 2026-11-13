@@ -26,7 +26,7 @@ A bottom tab bar that keeps each tab's place, and a Life Counter that works on a
   |---|---|
   | `#/`, `#/new`, `#/paste`, `#/deck/<id>`, `#d=<share>` (all today's routes) | Decks |
   | `#/browse` (and later `#/browse/…`) | Browse |
-  | `#/life` | Life Counter, setup screen |
+  | `#/life` | Life Counter; opens the game since 2026-11-13 (see the note under "Setup screen") |
   | `#/life/game` | Life Counter, game (bar hidden) |
 
   `tabOf(route)` and the new `backTarget` live in `src/lib/nav.ts` and are unit-tested; `app.ts` stays the only router.
@@ -35,8 +35,8 @@ A bottom tab bar that keeps each tab's place, and a Life Counter that works on a
   - Browse and Life Counter: each has its own container that stays mounted and is hidden (`hidden`) when another tab is active, so inputs, scroll and game state survive without any save code. Decks keeps today's re-render-on-route model; its container is the one that is cleared.
   - Tapping the tab you are already on goes to that tab's root and scrolls to the top (Decks → `#/`).
   - Reload restores the route only, by design; a reload on `#/life/game` resumes the saved game (below).
-- **Android back** (`installNativeBack`): `#/life/game` → `#/life` → `#/`; `#/browse` → `#/`; deck screens → `#/` (as today); `#/` → exit the app. Open `<dialog>`s still close first. Browsers keep their own back.
-- **Hidden in a game.** On `#/life/game` the tab bar and the site header are hidden so the tiles fill the screen. The game menu button (centre of the table, see below) has an always-visible "Leave game" entry that goes to `#/life`; the game is kept, not ended.
+- **Android back** (`installNativeBack`): `#/life/game` → `#/` (changed 2026-11-13; `#/life` is the game); `#/browse` → `#/`; deck screens → `#/` (as today); `#/` → exit the app. Open `<dialog>`s still close first. Browsers keep their own back.
+- **Hidden in a game.** On `#/life/game` the tab bar and the site header are hidden so the tiles fill the screen. The game menu button (centre of the table, see below) has an always-visible "Leave game" entry that goes to `#/` (Decks) since 2026-11-13; the game is kept, not ended.
 - **Until part 2 ships,** `#/browse` shows a placeholder page ("Browse is coming soon" with a link back to Decks). The tab, route, back behavior and kept-place container all exist now, so part 2 only fills the container.
 
 ## Life Counter
