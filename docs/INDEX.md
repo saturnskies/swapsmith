@@ -40,6 +40,7 @@ Status: **current** = in force or in progress; **draft** = proposed, not approve
 - [2026-11-05-suggestions-tab-status.md](superpowers/plans/2026-11-05-suggestions-tab-status.md) — done, 2026-11-05 — A small status badge on the Suggestions tab (Searching, Ready, Failed) so a search started in the Suggestions pane is visible from the Cards pane on a phone — one test-gated slice
 - [2026-11-05-undo-remove-and-short-rows.md](superpowers/plans/2026-11-05-undo-remove-and-short-rows.md) — done, 2026-11-05 — Two follow-ups from the 2026-11-05 UI critique (29/40) — Undo for removing a card, and shorter phone list rows by showing a quantity only above 1
 - [2026-11-06-swap-from-card.md](superpowers/plans/2026-11-06-swap-from-card.md) — done, 2026-11-06 — Plan for swap from a card — tap a deck card, see similar cards from decks with the same commander, popularity and comparison side by side, swap in one tap; five test-gated slices
+- [2026-11-13-life-counter-slice-1.md](superpowers/plans/2026-11-13-life-counter-slice-1.md) — draft, 2026-11-13 — Plan for Life Counter slice 1 — the tab opens straight into a saved default 2-player 40-life game, New game and Defaults sheets replace the setup screen, reset needs no confirm (with an undo toast), face-to-face 2-player layout checked; four test-gated tasks
 
 ## docs/superpowers/specs/
 
