@@ -1,3 +1,5 @@
+import type { ArtRef } from './art';
+
 /** Life Counter game state and its saved copy. Pure: no DOM. Kept under its own key, apart from the deck store (see the spec). */
 
 export const LIFE_KEY = 'swapsmith:life';
@@ -23,6 +25,10 @@ export interface Player {
   partners: boolean;
   /** Commander damage this player has taken, by `${seat}:${slot}` of the dealing commander (slot 1 = the partner). Zero entries are absent. */
   cmdr: Record<string, number>;
+  /** The card art behind this seat's tile, when one was chosen. */
+  art?: ArtRef;
+  /** A `#rrggbb` accent that overrides the palette swatch, when one was chosen. */
+  accent?: string;
 }
 
 /** What a change touches: life, poison, or the damage taken from one commander. */
@@ -52,6 +58,10 @@ export interface Setup {
   names: string[];
   /** Typed colors by seat: a PALETTE index, or -1 for the seat's own default. */
   colors: number[];
+  /** Chosen art by seat; null or absent means none. */
+  arts?: (ArtRef | null)[];
+  /** Chosen `#rrggbb` accents by seat; null or absent means none. */
+  accents?: (string | null)[];
 }
 
 /** The player count and starting life a new game opens with (the Life Counter's saved default). */
@@ -114,11 +124,43 @@ export function seatColor(c: unknown, seat: number): number {
   return isSwatch(c) ? c : seat % PALETTE.length;
 }
 
+const isObject = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x);
+
+const ART_ID_MAX = 64;
+const ART_TEXT_MAX = 80;
+const ART_URL_MAX = 300;
+
+const text = (x: unknown, max: number): x is string => typeof x === 'string' && x.length >= 1 && x.length <= max;
+
+/** The art reference `x` describes, copied field by field, or null when any field is missing, oversized or the `url` is not plain https. */
+export function sanitizeArt(x: unknown): ArtRef | null {
+  if (!isObject(x) || !text(x.id, ART_ID_MAX) || !text(x.cardId, ART_ID_MAX) || !text(x.name, ART_TEXT_MAX) || !text(x.artist, ART_TEXT_MAX) || !text(x.url, ART_URL_MAX)) return null;
+  try {
+    const u = new URL(x.url);
+    if (u.protocol !== 'https:' || !u.hostname) return null;
+  } catch {
+    return null;
+  }
+  return { id: x.id, cardId: x.cardId, name: x.name, artist: x.artist, url: x.url };
+}
+
+/** `x` as a lowercase `#rrggbb`, or null when it isn't one. */
+export function sanitizeAccent(x: unknown): string | null {
+  return typeof x === 'string' && /^#[0-9a-fA-F]{6}$/.test(x) ? x.toLowerCase() : null;
+}
+
+/** A player's optional art and accent as they should appear on the record: only the ones that are valid. */
+function looks(art: unknown, accent: unknown): Pick<Player, 'art' | 'accent'> {
+  const a = sanitizeArt(art);
+  const c = sanitizeAccent(accent);
+  return { ...(a ? { art: a } : {}), ...(c ? { accent: c } : {}) };
+}
+
 export function newGame(setup: Setup): Game {
   const n = clamp(Math.round(setup.players), 1, MAX_PLAYERS);
   return {
     startingLife: setup.startingLife,
-    players: Array.from({ length: n }, (_, i) => ({ name: cleanName(setup.names[i] ?? '', i), life: setup.startingLife, poison: 0, color: seatColor(setup.colors[i], i), partners: false, cmdr: {} })),
+    players: Array.from({ length: n }, (_, i) => ({ name: cleanName(setup.names[i] ?? '', i), life: setup.startingLife, poison: 0, color: seatColor(setup.colors[i], i), partners: false, cmdr: {}, ...looks(setup.arts?.[i], setup.accents?.[i]) })),
     history: [],
     first: null,
   };
@@ -222,6 +264,28 @@ export function setColor(game: Game, seat: number, color: number): Game {
   return { ...game, players: game.players.map((p, i) => (i === seat ? { ...p, color } : p)) };
 }
 
+/** Gives a player card art, or takes it away with null. A malformed art changes nothing. Not an undoable change. */
+export function setArt(game: Game, seat: number, art: ArtRef | null): Game {
+  const clean = art == null ? null : sanitizeArt(art);
+  if (!game.players[seat] || (art != null && !clean)) return game;
+  return { ...game, players: game.players.map((p, i) => {
+    if (i !== seat) return p;
+    const { art: _gone, ...rest } = p;
+    return clean ? { ...rest, art: clean } : rest;
+  }) };
+}
+
+/** Gives a player an accent color (`#rrggbb`), or takes it away with null. Anything else changes nothing. Not an undoable change. */
+export function setAccent(game: Game, seat: number, hex: string | null): Game {
+  const clean = hex == null ? null : sanitizeAccent(hex);
+  if (!game.players[seat] || (hex != null && !clean)) return game;
+  return { ...game, players: game.players.map((p, i) => {
+    if (i !== seat) return p;
+    const { accent: _gone, ...rest } = p;
+    return clean ? { ...rest, accent: clean } : rest;
+  }) };
+}
+
 /** Marks who goes first (or nobody); a seat that doesn't exist changes nothing. */
 export function setFirst(game: Game, seat: number | null): Game {
   if (seat != null && !(Number.isInteger(seat) && game.players[seat])) return game;
@@ -266,7 +330,6 @@ export function seating(n: number): { top: number[]; bottom: number[] } {
 
 // ---- saved copy ----
 
-const isObject = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x);
 const whole = (x: unknown, lo: number, hi: number): number | null => (typeof x === 'number' && Number.isFinite(x) ? clamp(Math.round(x), lo, hi) : null);
 
 function sanitizeGame(raw: unknown): Game | null {
@@ -283,6 +346,7 @@ function sanitizeGame(raw: unknown): Game | null {
       color: seatColor(p.color, players.length),
       partners: p.partners === true,
       cmdr: {},
+      ...looks(p.art, p.accent),
     });
   }
   // Commander damage can only come from another seat, and from a partner only if that seat has one.
@@ -329,7 +393,10 @@ function sanitizeSetup(raw: unknown): Setup {
   const r = isObject(raw) ? raw : {};
   const names = Array.isArray(r.names) ? r.names.slice(0, MAX_PLAYERS).map((n) => (typeof n === 'string' ? n.slice(0, MAX_NAME) : '')) : [];
   const colors = Array.isArray(r.colors) ? r.colors.slice(0, MAX_PLAYERS).map((c) => (isSwatch(c) ? c : -1)) : [];
-  return { players: sanitizePlayers(r.players), startingLife: whole(r.startingLife, 1, 999) ?? DEFAULT_LIFE, names, colors };
+  const setup: Setup = { players: sanitizePlayers(r.players), startingLife: whole(r.startingLife, 1, 999) ?? DEFAULT_LIFE, names, colors };
+  if (Array.isArray(r.arts)) setup.arts = r.arts.slice(0, MAX_PLAYERS).map(sanitizeArt);
+  if (Array.isArray(r.accents)) setup.accents = r.accents.slice(0, MAX_PLAYERS).map(sanitizeAccent);
+  return setup;
 }
 
 export interface LifeLoad {
