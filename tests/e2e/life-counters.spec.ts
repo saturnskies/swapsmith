@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { begin, life, minus, start } from './life-helpers';
+import { life, minus, start } from './life-helpers';
 
 test.beforeEach(async ({ page }) => {
   await page.route('https://api.scryfall.com/**', (route) => route.abort());
@@ -32,7 +32,6 @@ const menu = async (page: Page) => {
 };
 const threePlayers = async (page: Page) => {
   await start(page, { players: 3 });
-  await begin(page);
 };
 
 test('poison counts per player, warns at 10, and nothing else happens', async ({ page }) => {
@@ -103,9 +102,7 @@ test('partners: each commander of a pair is tracked on its own row', async ({ pa
 });
 
 test('life at zero or below warns but the player keeps playing', async ({ page }) => {
-  await start(page, { players: 1, life: 'custom' });
-  await page.getByLabel('Custom starting life').fill('1');
-  await begin(page);
+  await start(page, { players: 1, custom: '1' });
   await minus(page, 'Player 1').click();
   await expect(life(page, 0)).toHaveText('0');
   await expect(tile(page, 0).locator('.tile-warn')).toContainText('Life 0 or below');
