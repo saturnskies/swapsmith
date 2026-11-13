@@ -199,6 +199,11 @@ describe('readable', () => {
     expect(readable('#000000')).toBe('#000000');
   });
 
+  it('always answers lowercase #rrggbb, readable input included', () => {
+    expect(readable('#1D4E9E')).toBe('#1d4e9e');
+    expect(readable('#FFEE00')).toMatch(/^#[0-9a-f]{6}$/);
+  });
+
   it('darkens a too-light color until white text reaches 4.5:1, without lightening it', () => {
     for (const hex of ['#ffffff', '#ffee00', '#f0a0a0', '#88cc88', '#7a7a7a']) {
       const out = readable(hex);
