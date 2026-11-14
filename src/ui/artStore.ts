@@ -17,6 +17,8 @@ export const ART_HOST = 'cards.scryfall.io';
 const STORE = 'images';
 /** A use of an image is written to its row at most this often. */
 const BUMP_MS = 60 * 1000;
+/** An open that has neither succeeded nor failed after this long (blocked by another connection) is given up on. */
+const OPEN_TIMEOUT_MS = 5000;
 
 interface Row {
   id: string;
@@ -78,9 +80,17 @@ export function createArtStore(opts: ArtStoreOptions = {}): ArtStore {
       const factory = opts.idb === undefined ? (typeof indexedDB === 'undefined' ? null : indexedDB) : opts.idb;
       if (!factory) return reject(new Error('IndexedDB is not available'));
       const req = factory.open(dbName, 1);
+      let over = false;
+      const timer = setTimeout(() => {
+        over = true;
+        reject(new Error('IndexedDB open timed out'));
+      }, OPEN_TIMEOUT_MS);
       req.onupgradeneeded = () => req.result.createObjectStore(STORE, { keyPath: 'id' });
       req.onsuccess = () => {
         const conn = req.result;
+        clearTimeout(timer);
+        // Given up on while blocked, and now it got through: nobody is waiting for this connection, so don't keep it open.
+        if (over) return conn.close();
         // Let go of the connection when another tab upgrades the database, and forget it when the browser drops it.
         conn.onversionchange = () => {
           conn.close();
@@ -91,8 +101,11 @@ export function createArtStore(opts: ArtStoreOptions = {}): ArtStore {
         };
         resolve(conn);
       };
-      req.onerror = () => reject(req.error);
-      // `blocked` only says another connection is still open; the open goes on once it closes, so it is not a failure.
+      req.onerror = () => {
+        clearTimeout(timer);
+        reject(req.error);
+      };
+      // `blocked` only says another connection is still open: the open goes on once it closes, or the timer gives up.
     });
     dbp = attempt;
     // A failed open is tried again on the next call rather than disabling the store until reload.
