@@ -15,7 +15,8 @@ const saveBtn = (page: Page, seat: number) => page.getByRole('button', { name: `
 const useBtn = (page: Page, seat: number) => page.getByRole('button', { name: `Use profile for player ${seat}`, exact: true });
 const removeArt = (page: Page, seat: number) => page.getByRole('button', { name: `Remove art for player ${seat}`, exact: true });
 const profileNote = (page: Page, seat: number) => page.locator('.player-row').nth(seat - 1).locator('.profile-note');
-const picker = (page: Page, seat: number) => page.getByRole('dialog', { name: `Profile for Player ${seat}` });
+/** The Use profile dialog (it is named for the seat's current name, so it is found by class). */
+const picker = (page: Page, _seat: number) => page.locator('dialog.profile-picker');
 
 /** The profiles in the saved Life store. */
 const stored = (page: Page) =>
@@ -27,7 +28,7 @@ const tileColor = (page: Page, seat: number) => tile(page, seat - 1).evaluate((e
 /** In the Edit players dialog, picks Dungeon Delver's art for a seat through the art picker. */
 async function pickArt(page: Page, seat: number, card = DUNGEON) {
   await page.getByRole('button', { name: `Choose art for player ${seat}` }).click();
-  const p = page.getByRole('dialog', { name: `Art for Player ${seat}` });
+  const p = page.locator('dialog.art-picker'); // named for the seat's current name
   await p.getByRole('textbox', { name: 'Card name or artist' }).fill('delver');
   await p.getByRole('button', { name: 'Search', exact: true }).click();
   await p.getByRole('button', { name: card, exact: true }).click();
@@ -190,6 +191,23 @@ test.describe('save and use', () => {
     expect((await stored(page))[0].art?.id).toBe(id);
   });
 
+  test('using a profile on a seat whose image went missing fetches it again and brings the art back', async ({ page }) => {
+    await start(page);
+    await dressSeatOne(page);
+    await saveBtn(page, 1).click();
+    await expect(profileNote(page, 1)).toHaveText('Saved Edgar as a profile.');
+    const id = (await artId(page, 0))!;
+    await writeRows(page, [{ id, lastUsed: null }]);
+    await page.reload();
+    await expect(tile(page, 0).locator('.tile-life')).toBeVisible();
+    await page.waitForTimeout(300);
+    await expect(tile(page, 0)).not.toHaveAttribute('data-art', 'true');
+    await editPlayers(page);
+    await useProfile(page, 1, 'Edgar');
+    await expect(tile(page, 0)).toHaveAttribute('data-art', 'true');
+    expect((await cachedRows(page)).map((r) => r.id)).toEqual([id]);
+  });
+
   test('two seats on one profile share one image, and Remove art on one leaves the other\'s tile art', async ({ page }) => {
     await start(page, { players: 3 });
     await dressSeatOne(page);
@@ -243,7 +261,7 @@ test.describe('save and use', () => {
     expect(breyaArt).not.toBe(edgarArt);
     // Only Breya's profile holds her image now; it is the oldest row. Edgar's image is gone, so using him fetches it into a full cache.
     await removeArt(page, 1).click();
-    await writeRows(page, [{ id: edgarArt, lastUsed: null }, { id: breyaArt, lastUsed: 1 }, ...Array.from({ length: 22 }, (_, i) => ({ id: `filler-${i}`, lastUsed: 1000 + i }))]);
+    await writeRows(page, [{ id: edgarArt, lastUsed: null }, { id: breyaArt, lastUsed: 1 }, ...Array.from({ length: 23 }, (_, i) => ({ id: `filler-${i}`, lastUsed: 1000 + i }))]);
     expect((await cachedRows(page)).length).toBe(24);
     await useProfile(page, 2, 'Edgar');
     await expect(tile(page, 1)).toHaveAttribute('data-art', 'true');
