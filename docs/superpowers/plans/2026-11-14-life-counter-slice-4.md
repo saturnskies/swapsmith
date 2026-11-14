@@ -1,6 +1,6 @@
 ---
 description: Plan for Life Counter slice 4 — a seat that takes lethal damage (life 0, 10 poison, 21 from one commander) plays a blood splatter that settles into a skull while its art darkens and greys; reversible, reduced-motion safe, no network; two test-gated tasks
-status: draft
+status: done
 updated: 2026-11-14
 ---
 
@@ -58,12 +58,12 @@ updated: 2026-11-14
 - Produces: `isDead(game: Game, seat: number): boolean` exported from `src/lib/life.ts` (`warnings` now calls it for the three lethal lines, wording unchanged).
 - Tile contract: `data-dead="true|false"` on every tile element; `data-dying="true"` is set only for the animation window of a transition into death and removed on `animationend` or after 1300 ms, whichever comes first.
 
-- [ ] **Step 1: Write failing tests.** Unit (`life.test.ts`): `isDead` is true at life 0, life -5, poison 10, commander 21 from slot 0, commander 21 from slot 1 (partner), false at life 1, poison 9, commander 20, false for a bad seat index; `warnings` output is unchanged for all of these. E2E (`life-death.spec.ts`, desktop and phone, reuse `life-helpers.ts`): taking a seat to 0 sets `data-dead="true"` and `data-dying="true"` then the latter clears within 2 s; +1 life clears `data-dead`; die, heal, die again sets `data-dying` again; changing poison on an already dead seat does not set `data-dying`; poison 10 and commander 21 each kill; Undo from dead restores; New game and Reset clear; reload of a saved dead game gives `data-dead="true"` and never `data-dying`; with `page.emulateMedia({ reducedMotion: 'reduce' })` the dead tile has the skull visible and computed `animation-name` is `none` on the overlay; a dead tile's life number and name keep 4.5:1 over bright white art and over no art (reuse the contrast helper from `life-art.spec.ts`); the life buttons are still clickable on a dead tile (`pointer-events` on overlay is `none`); a rotated top tile's skull is not clipped (its bounding box lies inside the tile's).
-- [ ] **Step 2: Run** `npx vitest run tests/unit/life.test.ts` and `npx playwright test tests/e2e/life-death.spec.ts --trace off`. Expected: FAIL.
-- [ ] **Step 3: Implement** `isDead` in `src/lib/life.ts`. In `updateTile` set `data-dead`; detect the transition by comparing the previous `data-dead` with the new one (first draw of a tile never counts as a transition). Build the overlay once per tile as inline SVG (`aria-hidden`, `pointer-events: none`): a splatter group and a skull group. CSS: `.tile[data-dead="true"]` gets `filter: grayscale(1) brightness(.55)` on the art layer (not on the text), a darkened scrim, skull opacity 1 and splatter opacity .85; `.tile[data-dying="true"]` runs the burst (scale 0.2 to 1.1 to 1, 1.2 s) then crossfades splatter to skull; the reverse fades in 300 ms; `@media (prefers-reduced-motion: reduce)` removes all animation and transition.
-- [ ] **Step 4: Run** the unit and e2e specs, then `npm run check`. Expected: PASS.
-- [ ] **Step 5: Exercise it as a user** at 390x844 touch with live art: kill a seat with art, one without, one rotated at the top, undo, reload; read screenshots taken mid-animation (about 300 ms) and settled.
-- [ ] **Step 6: Commit** one commit per file, tests first.
+- [x] **Step 1: Write failing tests.** Unit (`life.test.ts`): `isDead` is true at life 0, life -5, poison 10, commander 21 from slot 0, commander 21 from slot 1 (partner), false at life 1, poison 9, commander 20, false for a bad seat index; `warnings` output is unchanged for all of these. E2E (`life-death.spec.ts`, desktop and phone, reuse `life-helpers.ts`): taking a seat to 0 sets `data-dead="true"` and `data-dying="true"` then the latter clears within 2 s; +1 life clears `data-dead`; die, heal, die again sets `data-dying` again; changing poison on an already dead seat does not set `data-dying`; poison 10 and commander 21 each kill; Undo from dead restores; New game and Reset clear; reload of a saved dead game gives `data-dead="true"` and never `data-dying`; with `page.emulateMedia({ reducedMotion: 'reduce' })` the dead tile has the skull visible and computed `animation-name` is `none` on the overlay; a dead tile's life number and name keep 4.5:1 over bright white art and over no art (reuse the contrast helper from `life-art.spec.ts`); the life buttons are still clickable on a dead tile (`pointer-events` on overlay is `none`); a rotated top tile's skull is not clipped (its bounding box lies inside the tile's).
+- [x] **Step 2: Run** `npx vitest run tests/unit/life.test.ts` and `npx playwright test tests/e2e/life-death.spec.ts --trace off`. Expected: FAIL.
+- [x] **Step 3: Implement** `isDead` in `src/lib/life.ts`. In `updateTile` set `data-dead`; detect the transition by comparing the previous `data-dead` with the new one (first draw of a tile never counts as a transition). Build the overlay once per tile as inline SVG (`aria-hidden`, `pointer-events: none`): a splatter group and a skull group. CSS: `.tile[data-dead="true"]` gets `filter: grayscale(1) brightness(.55)` on the art layer (not on the text), a darkened scrim, skull opacity 1 and splatter opacity .85; `.tile[data-dying="true"]` runs the burst (scale 0.2 to 1.1 to 1, 1.2 s) then crossfades splatter to skull; the reverse fades in 300 ms; `@media (prefers-reduced-motion: reduce)` removes all animation and transition.
+- [x] **Step 4: Run** the unit and e2e specs, then `npm run check`. Expected: PASS.
+- [x] **Step 5: Exercise it as a user** at 390x844 touch with live art: kill a seat with art, one without, one rotated at the top, undo, reload; read screenshots taken mid-animation (about 300 ms) and settled.
+- [x] **Step 6: Commit** one commit per file, tests first.
 
 ---
 
@@ -76,12 +76,12 @@ updated: 2026-11-14
 - Consumes: Task 1's transition detection in `updateTile`.
 - Produces: `buzz(ms?: number): void` in `src/ui/native.ts` (default 80; uses `navigator.vibrate` when present, never throws, does nothing under reduced motion).
 
-- [ ] **Step 1: Write the failing test**: stub `navigator.vibrate` with `page.addInitScript`; dying calls it once with 80; reload of a dead game, a counter change on a dead seat and healing do not call it; with reduced motion it is not called; a missing or throwing `vibrate` does not break the tile.
-- [ ] **Step 2: Run** the spec. Expected: FAIL.
-- [ ] **Step 3: Implement** `buzz` and call it from the transition branch only.
-- [ ] **Step 4: Docs**: update the art spec "Death" as built (decisions above, and that Capacitor Haptics was not added), CLAUDE.md architecture line for the death effect, mark this plan done at the end, run `tools/doc-index.sh` and `--check`.
-- [ ] **Step 5: Run** `npm run check`. Expected: PASS.
-- [ ] **Step 6: Commit** one commit per file, tests first.
+- [x] **Step 1: Write the failing test**: stub `navigator.vibrate` with `page.addInitScript`; dying calls it once with 80; reload of a dead game, a counter change on a dead seat and healing do not call it; with reduced motion it is not called; a missing or throwing `vibrate` does not break the tile.
+- [x] **Step 2: Run** the spec. Expected: FAIL.
+- [x] **Step 3: Implement** `buzz` and call it from the transition branch only.
+- [x] **Step 4: Docs**: update the art spec "Death" as built (decisions above, and that Capacitor Haptics was not added), CLAUDE.md architecture line for the death effect, mark this plan done at the end, run `tools/doc-index.sh` and `--check`.
+- [x] **Step 5: Run** `npm run check`. Expected: PASS.
+- [x] **Step 6: Commit** one commit per file, tests first.
 
 ---
 
