@@ -1,4 +1,5 @@
 import type { ArtRef } from './art';
+import { sanitizeProfiles, type Profile } from './profiles';
 
 /** Life Counter game state and its saved copy. Pure: no DOM. Kept under its own key, apart from the deck store (see the spec). */
 
@@ -75,6 +76,8 @@ export interface LifeStore {
   game: Game | null;
   setup: Setup;
   defaults: Defaults;
+  /** Saved pod members (at most 12). Absent until one is saved. */
+  profiles?: Profile[];
 }
 
 /** Tile colors: each keeps white text at 4.5:1 or better (checked in tests). */
@@ -292,7 +295,7 @@ export function setFirst(game: Game, seat: number | null): Game {
   return { ...game, first: seat };
 }
 
-const uint32 = () => crypto.getRandomValues(new Uint32Array(1))[0];
+export const uint32 = () => crypto.getRandomValues(new Uint32Array(1))[0];
 
 /** A fair random seat in 0..n-1. Numbers from the uneven tail of the 32-bit range are redrawn so no seat is favoured. */
 export function randomSeat(n: number, draw: () => number = uint32): number {
@@ -432,7 +435,8 @@ export function loadLife(storage: Storage | null): LifeLoad {
     return fresh(true);
   }
   if (typeof data.version === 'number' && data.version > 1) return fresh(true, true);
-  return { store: { version: 1, game: sanitizeGame(data.game), setup: sanitizeSetup(data.setup), defaults: sanitizeDefaults(data.defaults) }, persistent: true, future: false };
+  const profiles = sanitizeProfiles(data.profiles);
+  return { store: { version: 1, game: sanitizeGame(data.game), setup: sanitizeSetup(data.setup), defaults: sanitizeDefaults(data.defaults), ...(profiles.length ? { profiles } : {}) }, persistent: true, future: false };
 }
 
 /** Saves the game; returns false when storage is missing, blocked or full. */
