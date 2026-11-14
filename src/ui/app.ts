@@ -7,6 +7,7 @@ import { lifeRoute, tabOf, type Tab } from '../lib/nav';
 import { renderBrowse } from './browse';
 import { h } from './dom';
 import { renderHome } from './home';
+import type { Profile } from '../lib/profiles';
 import { createLife } from './life';
 import { renderNewDeck } from './newDeck';
 import { renderPaste } from './paste';
@@ -32,6 +33,8 @@ export interface AppContext {
   refresh(): void;
   /** Overwrites the saved decks (with their owned cards) and view with `next` (used by restore) and saves. */
   replaceStore(next: Store): void;
+  /** The Life Counter's saved player profiles, for Back up and Restore. Reads the Life Counter when called, since it is created after this context. */
+  profiles: { get(): Profile[]; merge(incoming: Profile[]): { added: number; skipped: number } };
 }
 
 export function startApp(root: HTMLElement): void {
@@ -94,6 +97,7 @@ export function startApp(root: HTMLElement): void {
       save();
       touch();
     },
+    profiles: { get: () => life.profiles(), merge: (incoming) => life.mergeProfiles(incoming) },
   };
 
   const banner = persistent
