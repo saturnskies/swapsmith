@@ -69,9 +69,26 @@ Built on the [slice 2 plan](../plans/2026-11-13-life-counter-slice-2.md); the de
 - **Edit dialog on a phone:** swatches are 44 px; the dialog scrolls under a Close that stays in view.
 - Still open for later slices: whether a profile's cached art counts against the cap when the profile is deleted (slice 3); pinch-and-drag crop focus; an offline hint in the picker.
 
+## Slice 3 as built (2026-11-14)
+
+Built on the [slice 3 plan](../plans/2026-11-14-life-counter-slice-3.md). The Profiles decisions above are made and shipped; the plan's choices where the spec was silent are below.
+
+- **A profile** is `{ id, name, art?, accent? }`, at most 12, kept in `store.profiles` (an optional field in the version 1 `swapsmith:life` record; no version bump, bad entries dropped on load). `src/lib/profiles.ts` is the pure layer; `src/ui/profilePicker.ts` is the Use profile dialog.
+- **Save and use:** each seat's row in Edit players has "Save as profile" (refused with "Give this player a name first" for an empty or default "Player N" name; a 13th is refused) and "Use profile" (a list of 44 px buttons with an accent chip). Game menu then Profiles renames or deletes.
+- **Using a profile copies it onto the seat; it does not link** (plan decision 2). Later edits to the profile do not change a game in progress, and editing the seat does not change the profile. A rename in Profiles does not show on a seat already playing.
+- **Deleting a profile never deletes its image** (plan decision 3, which answers the open item about a deleted profile's cached art). The image only stops being protected from eviction: profile art ids join the seats' and the remembered setup's in the keep set.
+- **Backup carries art references, not image bytes** (plan decision 4), to keep the file small and inside the host allow-list. A restored profile needs a connection once to show its art again; offline, using it still gives name and accent, an accent-coloured tile and a notice.
+- **Back up and Restore:** the backup file keeps `backup: 1` and `store` exactly as before and gains an optional top-level `profiles` (written only when there are some), so an older app restores the decks and ignores it and an older file restores with no profile change. Restore never deletes: a profile id in both keeps the current copy, new ones are added up to the cap of 12 and the rest are counted ("2 skipped, pod is full"). The file is read once for decks and once for profiles; a bad `profiles` field restores the decks and says nothing about profiles, and a profile merge failure never blocks the deck restore. The home screen reaches the profiles through a lazy `ctx.profiles` handle because the Life Counter is created after the app context.
+- **Known limits, parked on purpose:**
+  - There is no update-profile path: to change a saved player's art or colour, delete the profile and save the seat again. Saving the same seat twice makes two profiles, which is allowed (two people can share a name).
+  - Delete has one undo slot: a second delete within 8 s makes only the last one undoable. Reset shares the slot.
+  - The delete undo toast lives inside the Profiles dialog, so closing the dialog within 8 s makes the deletion permanent.
+  - Renaming in Profiles can produce a default-looking name ("Player 2"), which Save as profile would refuse.
+  - If Edit players is closed while a profile's image is being fetched, the seat gets name and accent but the "art unavailable" notice has nowhere to show.
+
 ## Open items for the plan
 
 - Saved-store version bump and sanitizer changes (`swapsmith:life`); profiles key and backup file shape (must not touch `swapsmith:v1`, see Android signing gotchas in CLAUDE.md).
 - Image cache size cap and eviction (ADR-006 bounded cache is the model).
 - Scryfall art search query shape, and an e2e fixture set for it.
-- Whether a game's cached art counts against the cap when its profile is deleted.
+- Whether a game's cached art counts against the cap when its profile is deleted. (Answered in slice 3: deleting a profile never deletes its image.)
