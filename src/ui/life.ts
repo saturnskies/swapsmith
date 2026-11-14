@@ -11,6 +11,7 @@ import {
   applyChange,
   counter,
   gameFromDefaults,
+  isDead,
   loadLife,
   newGame,
   parseStartingLife,
@@ -36,6 +37,7 @@ import { MAX_PROFILES, addProfile, applyProfile, deleteProfile, mergeProfiles as
 import { openArtPicker } from './artPicker';
 import { createArtStore, isArtUrl, type ArtStore } from './artStore';
 import { segmented } from './controls';
+import { deathOverlay } from './deathArt';
 import { h, icon } from './dom';
 import { openProfilePicker } from './profilePicker';
 
@@ -519,6 +521,24 @@ export function createLife(storage: Storage | null, client: ScryfallClient, artS
       if (lostFocus) open.focus();
     };
 
+    /** The burst's window: data-dying stays on a tile until its skull's animation ends, or this long, whichever is first. */
+    const DYING_MS = 1300;
+    const dyingTimers = new Map<number, number>();
+    const endDying = (seat: number) => {
+      window.clearTimeout(dyingTimers.get(seat));
+      dyingTimers.delete(seat);
+      parts.get(seat)?.el.removeAttribute('data-dying');
+    };
+    /** Starts the burst on a tile that has just died (never with reduced motion, which shows the settled skull at once). */
+    const startDying = (seat: number) => {
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      const el = parts.get(seat)!.el;
+      endDying(seat);
+      el.dataset.dying = 'true';
+      el.querySelector('.death-skull')?.addEventListener('animationend', () => endDying(seat), { once: true });
+      dyingTimers.set(seat, window.setTimeout(() => endDying(seat), DYING_MS));
+    };
+
     /** Redraws everything a seat's tile shows from the saved game. */
     const updateTile = (seat: number) => {
       const g = store.game!;
@@ -536,6 +556,13 @@ export function createLife(storage: Storage | null, client: ScryfallClient, artS
       const why = warnings(g, seat);
       t.warn.textContent = why.join(' · ');
       t.el.dataset.warn = String(why.length > 0);
+      // Death is derived from the counters on every redraw. Only a change from alive to dead plays the burst: a tile's first
+      // draw (a load, a reload, a tab switch) has no earlier state, so a dead seat comes back already settled.
+      const wasDead = t.el.dataset.dead;
+      const dead = isDead(g, seat);
+      t.el.dataset.dead = String(dead);
+      if (!dead) endDying(seat);
+      else if (wasDead === 'false') startDying(seat);
       syncArt(seat);
     };
 
@@ -597,6 +624,7 @@ export function createLife(storage: Storage | null, client: ScryfallClient, artS
         'div',
         { class: 'tile', 'data-player': seat, 'data-rotate': flipped ? '180' : '0', 'data-warn': 'false', 'data-first': 'false', style: `--tile:${p.accent ?? PALETTE[p.color].hex}` },
         artEl,
+        deathOverlay(seat),
         h(
           'div',
           { class: 'tile-inner' },
