@@ -31,7 +31,23 @@ function setup(reply: () => Response | Promise<Response> = image(), over: ArtSto
     revokeObjectURL: (u) => void revoked.push(u),
     ...over,
   });
-  return { store, fetches, urls, revoked };
+  return { store, fetches, urls, revoked, advance: (ms: number) => void (t += ms) };
+}
+
+/** A factory that counts opens and hands each opened connection to `seen`, on top of the (fake) browser IndexedDB. */
+function spyFactory(onOpen?: (req: IDBOpenDBRequest, call: number) => void) {
+  const conns: IDBDatabase[] = [];
+  let opens = 0;
+  const factory = {
+    open(name: string, version?: number) {
+      const call = ++opens;
+      const req = indexedDB.open(name, version);
+      req.addEventListener('success', () => conns.push(req.result));
+      onOpen?.(req, call);
+      return req;
+    },
+  } as unknown as IDBFactory;
+  return { factory, conns, opens: () => opens };
 }
 
 afterEach(() => vi.restoreAllMocks());
@@ -130,8 +146,9 @@ describe('artStore eviction', () => {
   });
 
   it('counts a use of an image (url) as recent', async () => {
-    const { store } = setup(image(), { caps: small });
+    const { store, advance } = setup(image(), { caps: small });
     for (const id of ['a', 'b', 'c']) await store.save(ref(id), new Set());
+    advance(61_000); // a use is recorded at one-minute resolution (see the throttle tests)
     await store.url('a'); // a is now the newest
     await store.save(ref('d'), new Set());
     expect([await store.has('a'), await store.has('b'), await store.has('c'), await store.has('d')]).toEqual([true, false, true, true]);
@@ -272,5 +289,124 @@ describe('artStore with storage that is missing, throwing or full', () => {
     await store.save(ref('a'), new Set());
     vi.spyOn(IDBObjectStore.prototype, 'delete').mockImplementation(() => { throw new Error('blocked'); });
     expect(await store.save(ref('b'), new Set())).toBe('b');
+  });
+});
+
+describe('artStore use bumps are throttled', () => {
+  it('many url() calls inside a minute rewrite the image row once (the save), not once per call', async () => {
+    const { store } = setup();
+    await store.save(ref('a'), new Set());
+    const put = vi.spyOn(IDBObjectStore.prototype, 'put');
+    for (let i = 0; i < 20; i++) expect(await store.url('a')).toMatch(/^blob:/);
+    expect(await store.save(ref('a'), new Set())).toBe('a');
+    expect(put).not.toHaveBeenCalled();
+  });
+
+  it('writes the row again once a minute has passed, then not again until the next minute', async () => {
+    const { store, advance } = setup();
+    await store.save(ref('a'), new Set());
+    const put = vi.spyOn(IDBObjectStore.prototype, 'put');
+    advance(61_000);
+    await store.url('a');
+    await store.url('a');
+    expect(put).toHaveBeenCalledTimes(1);
+    advance(61_000);
+    await store.url('a');
+    expect(put).toHaveBeenCalledTimes(2);
+  });
+
+  it('a first use after a reload (nothing tracked in memory) is recorded once', async () => {
+    const name = `art-test-bump-${dbCount++}`;
+    await setup(image(), { dbName: name }).store.save(ref('a'), new Set());
+    const { store } = setup(image(), { dbName: name });
+    const put = vi.spyOn(IDBObjectStore.prototype, 'put');
+    await store.url('a');
+    await store.url('a');
+    expect(put).toHaveBeenCalledTimes(1);
+  });
+
+  it('a delete between two uses is not undone by a later bump', async () => {
+    const { store, advance } = setup();
+    await store.save(ref('a'), new Set());
+    await store.url('a');
+    expect(await store.remove('a')).toBe(true);
+    advance(61_000);
+    expect(await store.url('a')).toBeNull();
+    expect(await store.has('a')).toBe(false);
+  });
+
+  it('eviction still goes by last use once uses are a minute apart', async () => {
+    const { store, advance } = setup(image(), { caps: { count: 3, bytes: ART_CAPS.bytes } });
+    for (const id of ['a', 'b', 'c']) {
+      await store.save(ref(id), new Set());
+      advance(61_000);
+    }
+    await store.url('a');
+    advance(61_000);
+    await store.url('b');
+    advance(61_000);
+    await store.save(ref('d'), new Set()); // c was used least recently
+    expect([await store.has('a'), await store.has('b'), await store.has('c'), await store.has('d')]).toEqual([true, true, false, true]);
+  });
+});
+
+describe('artStore keeps one healthy connection', () => {
+  it('a blocked open is waited out, not failed: the call succeeds and only one connection is opened', async () => {
+    const { factory, conns, opens } = spyFactory((req) => queueMicrotask(() => req.onblocked?.(new Event('blocked') as IDBVersionChangeEvent)));
+    const { store } = setup(image(), { idb: factory });
+    expect(await store.save(ref('a'), new Set())).toBe('a');
+    expect(await store.has('a')).toBe(true);
+    expect(opens()).toBe(1);
+    expect(conns).toHaveLength(1);
+  });
+
+  it('closes its connection when another tab upgrades the database, so that upgrade is not blocked', async () => {
+    const name = `art-test-upgrade-${dbCount++}`;
+    const { factory } = spyFactory();
+    const { store } = setup(image(), { idb: factory, dbName: name });
+    expect(await store.save(ref('a'), new Set())).toBe('a');
+    const upgraded = await new Promise<IDBDatabase | string>((resolve) => {
+      const req = indexedDB.open(name, 2);
+      req.onsuccess = () => resolve(req.result);
+      req.onblocked = () => resolve('blocked');
+      req.onerror = () => resolve('error');
+      setTimeout(() => resolve('timeout'), 500);
+    });
+    expect(upgraded).not.toBe('blocked');
+    expect(upgraded).not.toBe('timeout');
+    (upgraded as IDBDatabase).close();
+  });
+
+  it('opens a new connection after the browser reports the old one closed', async () => {
+    const { factory, conns, opens } = spyFactory();
+    const { store } = setup(image(), { idb: factory });
+    expect(await store.save(ref('a'), new Set())).toBe('a');
+    conns[0].close();
+    conns[0].onclose?.(new Event('close'));
+    expect(await store.has('a')).toBe(true);
+    expect(await store.url('a')).toMatch(/^blob:/);
+    expect(opens()).toBe(2);
+  });
+
+  it('recovers when a connection is dead and nobody was told: the next call reopens', async () => {
+    const { factory, conns, opens } = spyFactory();
+    const { store } = setup(image(), { idb: factory });
+    expect(await store.save(ref('a'), new Set())).toBe('a');
+    conns[0].close(); // as when Safari drops it: no event reached the store
+    expect(await store.has('a')).toBe(true);
+    expect(await store.url('a')).toMatch(/^blob:/);
+    expect(await store.remove('a')).toBe(true);
+    expect(opens()).toBe(2);
+  });
+
+  it('a failed open is tried again on the next call', async () => {
+    let failures = 1;
+    const { factory, opens } = spyFactory();
+    const flaky = { open: (n: string, v?: number) => { if (failures-- > 0) throw new Error('SecurityError'); return factory.open(n, v); } } as unknown as IDBFactory;
+    const { store } = setup(image(), { idb: flaky });
+    expect(await store.save(ref('a'), new Set())).toBeNull();
+    expect(await store.save(ref('a'), new Set())).toBe('a');
+    expect(await store.has('a')).toBe(true);
+    expect(opens()).toBe(1);
   });
 });
