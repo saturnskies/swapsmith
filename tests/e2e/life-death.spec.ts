@@ -248,7 +248,7 @@ test.describe('reduced motion', () => {
       tile(page, 0).evaluate((el) => {
         const pick = (sel: string) => {
           const cs = getComputedStyle(el.querySelector(sel)!);
-          return { opacity: cs.opacity, animation: cs.animationName, transition: cs.transitionDuration };
+          return { opacity: cs.opacity, animation: cs.animationName, transition: cs.transitionDuration, filter: cs.filter };
         };
         return { overlay: pick('.tile-death'), splat: pick('.death-splat'), skull: pick('.death-skull'), art: pick('.tile-art') };
       });
@@ -260,6 +260,8 @@ test.describe('reduced motion', () => {
       expect(part.transition).toMatch(/^0s(, 0s)*$/);
     }
     expect(r.art.transition).toMatch(/^0s(, 0s)*$/);
+    // The art is already grey and dark straight after death, with nothing left to fade.
+    expect(r.art.filter).toBe('grayscale(1) brightness(0.55)');
     await page.waitForTimeout(300);
     expect(await dyingCount(page)).toBe(0);
   });
@@ -451,5 +453,139 @@ test.describe('how the dead tile looks and behaves', () => {
     }
     await plus(page, 'Player 3').click();
     await expect(life(page, 2)).toHaveText('1');
+  });
+});
+
+test.describe('haptic buzz', () => {
+  type Mode = 'record' | 'missing' | 'throws';
+  /** Replaces navigator.vibrate before the page loads: records its calls, is absent, or throws. */
+  const stubVibrate = (page: Page, mode: Mode = 'record') =>
+    page.addInitScript((m) => {
+      const w = window as unknown as { __buzz: unknown[] };
+      w.__buzz = [];
+      const value =
+        m === 'record'
+          ? (...args: unknown[]) => (w.__buzz.push(args), true)
+          : m === 'throws'
+            ? () => {
+                throw new Error('vibrate is blocked');
+              }
+            : undefined;
+      Object.defineProperty(Navigator.prototype, 'vibrate', { value, configurable: true, writable: true });
+      Object.defineProperty(navigator, 'vibrate', { value, configurable: true, writable: true });
+    }, mode);
+  const buzzes = (page: Page) => page.evaluate(() => (window as unknown as { __buzz: unknown[] }).__buzz);
+
+  test('dying buzzes once for 80 ms', async ({ page }) => {
+    await stubVibrate(page);
+    await oneLife(page);
+    await minus(page, 'Player 1').click();
+    await rest(page, 0);
+    expect(await buzzes(page)).toEqual([[80]]);
+  });
+
+  test('die, heal, die again buzzes each time', async ({ page }) => {
+    await stubVibrate(page);
+    await oneLife(page);
+    await minus(page, 'Player 1').click();
+    await rest(page, 0);
+    await plus(page, 'Player 1').click();
+    await alive(page, 0);
+    await minus(page, 'Player 1').click();
+    await rest(page, 0);
+    expect(await buzzes(page)).toEqual([[80], [80]]);
+  });
+
+  test('healing, a counter change on a dead seat, another seat\'s change, a reload and a tab switch do not buzz', async ({ page }) => {
+    await stubVibrate(page);
+    await oneLife(page);
+    await minus(page, 'Player 1').click();
+    await rest(page, 0);
+    expect(await buzzes(page)).toHaveLength(1);
+    await minus(page, 'Player 1').click();
+    await bump(page, 'Player 1', 'Poison', 2);
+    await plus(page, 'Player 2').click();
+    await plus(page, 'Player 1').click();
+    await plus(page, 'Player 1').click();
+    await plus(page, 'Player 1').click();
+    await alive(page, 0);
+    await page.waitForTimeout(300);
+    // Only the first death buzzed: more damage and poison on the dead seat, another seat's change and healing add nothing.
+    expect(await buzzes(page)).toHaveLength(1);
+    await minus(page, 'Player 2').click();
+    await minus(page, 'Player 2').click();
+    await rest(page, 1);
+    await page.waitForTimeout(100);
+    const afterSecondDeath = (await buzzes(page)).length;
+    await page.evaluate(() => (location.hash = '#/'));
+    await page.evaluate(() => (location.hash = '#/life'));
+    await dead(page, 1);
+    await page.waitForTimeout(300);
+    expect((await buzzes(page)).length).toBe(afterSecondDeath);
+    await page.reload();
+    await dead(page, 1);
+    await page.waitForTimeout(300);
+    expect(await buzzes(page)).toEqual([]);
+  });
+
+  test('a saved dead game that reloads does not buzz', async ({ page }) => {
+    await stubVibrate(page);
+    await oneLife(page);
+    await minus(page, 'Player 1').click();
+    await rest(page, 0);
+    await page.reload();
+    await dead(page, 0);
+    await page.waitForTimeout(300);
+    expect(await buzzes(page)).toEqual([]);
+  });
+
+  test('with reduced motion it does not buzz', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await stubVibrate(page);
+    await oneLife(page);
+    await minus(page, 'Player 1').click();
+    await dead(page, 0);
+    await page.waitForTimeout(300);
+    expect(await buzzes(page)).toEqual([]);
+  });
+
+  test('a Reset toast Undo that brings a dead seat back plays the burst again, and buzzes again', async ({ page }) => {
+    await stubVibrate(page);
+    await oneLife(page);
+    await minus(page, 'Player 1').click();
+    await rest(page, 0);
+    expect(await buzzes(page)).toHaveLength(1);
+    await (await menu(page)).getByRole('button', { name: 'Reset life totals' }).click();
+    await alive(page, 0);
+    expect(await buzzes(page)).toHaveLength(1);
+    await resetDyingCount(page);
+    await page.locator('.life-toast').getByRole('button', { name: 'Undo' }).click();
+    // Accepted behavior: the restore is a transition from alive to dead, so it replays the burst and buzzes.
+    await dead(page, 0);
+    await expect.poll(() => dyingCount(page)).toBe(1);
+    await expect.poll(async () => (await buzzes(page)).length).toBe(2);
+  });
+
+  test('a missing vibrate does not break the tile', async ({ page }) => {
+    await stubVibrate(page, 'missing');
+    await oneLife(page);
+    await minus(page, 'Player 1').click();
+    await rest(page, 0);
+    await expect(life(page, 0)).toHaveText('0');
+    await plus(page, 'Player 1').click();
+    await alive(page, 0);
+  });
+
+  test('a throwing vibrate does not break the tile', async ({ page }) => {
+    await stubVibrate(page, 'throws');
+    const errors: string[] = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await oneLife(page);
+    await minus(page, 'Player 1').click();
+    await rest(page, 0);
+    await expect(life(page, 0)).toHaveText('0');
+    await plus(page, 'Player 1').click();
+    await alive(page, 0);
+    expect(errors).toEqual([]);
   });
 });
