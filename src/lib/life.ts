@@ -305,19 +305,35 @@ export function randomSeat(n: number, draw: () => number = uint32): number {
   return x % n;
 }
 
-/** Why a player is in danger, if they are. Only a warning: nobody is ever eliminated automatically. */
-export function warnings(game: Game, seat: number): string[] {
+/** One lethal source on a seat: life at or below 0, 10 poison, or 21 damage from a single commander (a partner counts on its own). */
+type Lethal = { kind: 'life' } | { kind: 'poison'; value: number } | { kind: 'cmdr'; value: number; from: number; slot: number };
+
+function lethal(game: Game, seat: number): Lethal[] {
   const p = game.players[seat];
   if (!p) return [];
-  const out: string[] = [];
-  if (p.life <= 0) out.push('Life 0 or below');
-  if (p.poison >= POISON_LETHAL) out.push(`Poison ${p.poison}`);
-  for (const [k, v] of Object.entries(p.cmdr)) {
-    if (v < CMDR_LETHAL) continue;
+  const out: Lethal[] = [];
+  if (p.life <= 0) out.push({ kind: 'life' });
+  if (p.poison >= POISON_LETHAL) out.push({ kind: 'poison', value: p.poison });
+  for (const [k, value] of Object.entries(p.cmdr)) {
+    if (value < CMDR_LETHAL) continue;
     const [from, slot] = k.split(':').map(Number);
-    out.push(`Commander damage ${v} from ${game.players[from]?.name ?? 'a player'}${slot === 1 ? "'s partner" : ''}`);
+    out.push({ kind: 'cmdr', value, from, slot });
   }
   return out;
+}
+
+/** True when the seat has taken lethal damage from any source. Derived from the counters each time, never stored; a bad seat index is false. */
+export function isDead(game: Game, seat: number): boolean {
+  return lethal(game, seat).length > 0;
+}
+
+/** Why a player is in danger, if they are. Only a warning: nobody is ever eliminated automatically. */
+export function warnings(game: Game, seat: number): string[] {
+  return lethal(game, seat).map((l) => {
+    if (l.kind === 'life') return 'Life 0 or below';
+    if (l.kind === 'poison') return `Poison ${l.value}`;
+    return `Commander damage ${l.value} from ${game.players[l.from]?.name ?? 'a player'}${l.slot === 1 ? "'s partner" : ''}`;
+  });
 }
 
 /**
