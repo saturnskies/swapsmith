@@ -39,6 +39,7 @@ import { createArtStore, isArtUrl, type ArtStore } from './artStore';
 import { segmented } from './controls';
 import { deathOverlay } from './deathArt';
 import { h, icon } from './dom';
+import { buzz } from './native';
 import { openProfilePicker } from './profilePicker';
 
 /** A press this long (ms) counts as a hold: ±10 instead of ±1. */
@@ -529,12 +530,13 @@ export function createLife(storage: Storage | null, client: ScryfallClient, artS
       dyingTimers.delete(seat);
       parts.get(seat)?.el.removeAttribute('data-dying');
     };
-    /** Starts the burst on a tile that has just died (never with reduced motion, which shows the settled skull at once). */
+    /** Starts the burst and the buzz on a tile that has just died (neither with reduced motion, which shows the settled skull at once). */
     const startDying = (seat: number) => {
       if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
       const el = parts.get(seat)!.el;
       endDying(seat);
       el.dataset.dying = 'true';
+      buzz();
       el.querySelector('.death-skull')?.addEventListener('animationend', () => endDying(seat), { once: true });
       dyingTimers.set(seat, window.setTimeout(() => endDying(seat), DYING_MS));
     };
