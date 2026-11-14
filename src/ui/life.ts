@@ -922,12 +922,12 @@ export function createLife(storage: Storage | null, client: ScryfallClient, artS
                 persist();
                 renaming = null;
                 draw();
-                list.querySelector<HTMLElement>(`[data-rename="${p.id}"]`)?.focus();
+                list.querySelector<HTMLElement>(`[data-rename="${CSS.escape(p.id)}"]`)?.focus();
               });
               cancel.addEventListener('click', () => {
                 renaming = null;
                 draw();
-                list.querySelector<HTMLElement>(`[data-rename="${p.id}"]`)?.focus();
+                list.querySelector<HTMLElement>(`[data-rename="${CSS.escape(p.id)}"]`)?.focus();
               });
               target = field;
               return h('li', { class: 'profile-row renaming' }, form);
@@ -958,7 +958,7 @@ export function createLife(storage: Storage | null, client: ScryfallClient, artS
                   persist();
                 }
                 draw();
-                list.querySelector<HTMLElement>(`[data-rename="${back.profile.id}"]`)?.focus();
+                list.querySelector<HTMLElement>(`[data-rename="${CSS.escape(back.profile.id)}"]`)?.focus();
               });
               toastEl.replaceChildren(h('span', {}, `Deleted ${p.name}`), undo);
               timer = window.setTimeout(dropToast, TOAST_MS);
