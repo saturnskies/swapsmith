@@ -3,7 +3,7 @@ import { SCRIM_ALPHA } from '../../src/lib/art';
 import { composite, contrastRatio, effectiveBackground, parseColor } from '../support/contrast';
 import { solidPng } from '../support/png';
 import { artReplies, mockArt, type ArtMock } from './helpers';
-import { editPlayers, menu, start, tile } from './life-helpers';
+import { artId, cachedRows, editPlayers, menu, start, tile, writeRows } from './life-helpers';
 
 let art: ArtMock;
 test.beforeEach(async ({ page }) => {
@@ -39,42 +39,7 @@ async function pickDungeon(page: Page, seat = 1) {
   await cell(p, DUNGEON).click();
   await expect(tile(page, seat - 1)).toHaveAttribute('data-art', 'true');
 }
-/** Every row of the art cache, read from the page's own IndexedDB. */
-const cachedRows = (page: Page) =>
-  page.evaluate(
-    () =>
-      new Promise<Array<{ id: string; bytes: number; lastUsed: number }>>((resolve, reject) => {
-        const open = indexedDB.open('swapsmith-art', 1);
-        open.onsuccess = () => {
-          const req = open.result.transaction('images').objectStore('images').getAll();
-          req.onsuccess = () => resolve(req.result.map((r: { id: string; bytes: number; lastUsed: number }) => ({ id: r.id, bytes: r.bytes, lastUsed: r.lastUsed })));
-          req.onerror = () => reject(req.error);
-        };
-        open.onerror = () => reject(open.error);
-      }),
-  );
-/** Writes rows straight into the cache (`id`, `lastUsed`), or deletes them (`lastUsed` null). */
-const writeRows = (page: Page, rows: Array<{ id: string; lastUsed: number | null }>) =>
-  page.evaluate(
-    (list) =>
-      new Promise<void>((resolve, reject) => {
-        const open = indexedDB.open('swapsmith-art', 1);
-        open.onsuccess = () => {
-          const tx = open.result.transaction('images', 'readwrite');
-          const store = tx.objectStore('images');
-          for (const r of list) {
-            if (r.lastUsed === null) store.delete(r.id);
-            else store.put({ id: r.id, blob: new Blob([new Uint8Array(10)], { type: 'image/jpeg' }), bytes: 10, lastUsed: r.lastUsed });
-          }
-          tx.oncomplete = () => resolve();
-          tx.onerror = () => reject(tx.error);
-        };
-        open.onerror = () => reject(open.error);
-      }),
-    rows,
-  );
 const lastUsedOf = async (page: Page, id: string) => (await cachedRows(page)).find((r) => r.id === id)?.lastUsed;
-const artId = (page: Page, seat: number) => page.evaluate((s) => JSON.parse(localStorage.getItem('swapsmith:life') ?? '{}').game?.players?.[s]?.art?.id as string | undefined, seat);
 
 test.describe('the picker', () => {
   test('opens from a seat\'s Art button, is labelled, starts in the search box, and Escape closes it', async ({ page }) => {
