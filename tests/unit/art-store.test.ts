@@ -50,7 +50,41 @@ function spyFactory(onOpen?: (req: IDBOpenDBRequest, call: number) => void) {
   return { factory, conns, opens: () => opens };
 }
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.useRealTimers();
+});
+
+/**
+ * A factory whose open for the calls `held` says yes to reports `blocked` and hands its success to the store only when
+ * the test calls `deliver()`; every other open goes straight to the (fake) browser IndexedDB.
+ */
+function heldFactory(held: (call: number) => boolean) {
+  const conns: IDBDatabase[] = [];
+  const deliveries: Array<() => void> = [];
+  let opens = 0;
+  const factory = {
+    open(name: string, version?: number) {
+      const call = ++opens;
+      const real = indexedDB.open(name, version);
+      if (!held(call)) {
+        real.addEventListener('success', () => conns.push(real.result));
+        return real;
+      }
+      const fake: Record<string, unknown> & { onsuccess?: () => void; onupgradeneeded?: () => void; onblocked?: (e: Event) => void } = {};
+      Object.defineProperty(fake, 'result', { get: () => real.result });
+      Object.defineProperty(fake, 'error', { get: () => real.error });
+      real.onupgradeneeded = () => fake.onupgradeneeded?.();
+      real.onsuccess = () => {
+        conns.push(real.result);
+        deliveries.push(() => fake.onsuccess?.());
+      };
+      queueMicrotask(() => fake.onblocked?.(new Event('blocked')));
+      return fake as unknown as IDBOpenDBRequest;
+    },
+  } as unknown as IDBFactory;
+  return { factory, conns, opens: () => opens, deliver: () => deliveries.splice(0).forEach((d) => d()) };
+}
 
 describe('isArtUrl', () => {
   it('accepts only https on cards.scryfall.io, with no credentials or port', () => {
@@ -408,5 +442,81 @@ describe('artStore keeps one healthy connection', () => {
     expect(await store.save(ref('a'), new Set())).toBe('a');
     expect(await store.has('a')).toBe(true);
     expect(opens()).toBe(1);
+  });
+});
+
+/** Lets the fake IndexedDB finish what it has queued (its timers are real). */
+const tick = async () => {
+  for (let i = 0; i < 20; i++) await new Promise<void>((r) => setImmediate(r));
+};
+
+describe('artStore with an open that stays blocked', () => {
+  it('gives up after 5 s: every waiting call settles with null or false, and a later call opens again', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const { factory, conns, opens, deliver } = heldFactory((call) => call === 1);
+    const { store, fetches } = setup(image(), { idb: factory });
+    const waiting = [store.has('a'), store.url('a'), store.save(ref('a'), new Set()), store.remove('a')];
+    let settled = false;
+    void Promise.all(waiting).then(() => (settled = true));
+    await vi.advanceTimersByTimeAsync(4900);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(200);
+    expect(await Promise.all(waiting)).toEqual([false, null, null, false]);
+    expect(fetches).toEqual([]);
+    expect(opens()).toBe(1);
+
+    expect(await store.save(ref('a'), new Set())).toBe('a'); // the next call opens again
+    expect(opens()).toBe(2);
+
+    await tick();
+    deliver(); // the abandoned open finally succeeds: its connection must not be kept
+    expect(() => conns[0].transaction('images')).toThrow();
+    expect(await store.has('a')).toBe(true);
+    expect(opens()).toBe(2);
+  });
+
+  it('a blocked open that completes at 2 s works normally, with one connection', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const { factory, opens, deliver } = heldFactory((call) => call === 1);
+    const { store } = setup(image(), { idb: factory });
+    const saving = store.save(ref('a'), new Set());
+    await vi.advanceTimersByTimeAsync(2000);
+    await tick();
+    deliver();
+    expect(await saving).toBe('a');
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(await store.has('a')).toBe(true);
+    expect(await store.url('a')).toMatch(/^blob:/);
+    expect(opens()).toBe(1);
+  });
+});
+
+describe('artStore forgets a connection by its events, not by retrying', () => {
+  /** Calls that throw on a transaction: a connection used after it was closed. */
+  const deadUses = (spy: { mock: { results: Array<{ type: string }> } }) => spy.mock.results.filter((r) => r.type === 'throw').length;
+
+  it('after the close event, the next call opens a new connection without ever using the dead one', async () => {
+    const { factory, conns, opens } = spyFactory();
+    const { store } = setup(image(), { idb: factory });
+    expect(await store.save(ref('a'), new Set())).toBe('a');
+    const tx = vi.spyOn(IDBDatabase.prototype, 'transaction');
+    conns[0].close();
+    conns[0].onclose?.(new Event('close'));
+    expect(await store.has('a')).toBe(true);
+    expect(opens()).toBe(2);
+    expect(deadUses(tx)).toBe(0);
+  });
+
+  it('after the versionchange event, the store has closed the connection and opens a new one without using the old', async () => {
+    const { factory, conns, opens } = spyFactory();
+    const { store } = setup(image(), { idb: factory });
+    expect(await store.save(ref('a'), new Set())).toBe('a');
+    const tx = vi.spyOn(IDBDatabase.prototype, 'transaction');
+    conns[0].onversionchange?.(new Event('versionchange') as IDBVersionChangeEvent);
+    expect(() => conns[0].transaction('images')).toThrow(); // closed by the store itself
+    tx.mockClear();
+    expect(await store.has('a')).toBe(true);
+    expect(opens()).toBe(2);
+    expect(deadUses(tx)).toBe(0);
   });
 });
