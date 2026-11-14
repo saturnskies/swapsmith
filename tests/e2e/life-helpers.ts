@@ -38,3 +38,40 @@ export const editPlayers = async (page: Page) => {
   return page.getByRole('dialog', { name: 'Edit players' });
 };
 export const tile = (page: Page, seat: number) => page.locator(`.tile[data-player="${seat}"]`);
+
+/** Every row of the art cache, read from the page's own IndexedDB. */
+export const cachedRows = (page: Page) =>
+  page.evaluate(
+    () =>
+      new Promise<Array<{ id: string; bytes: number; lastUsed: number }>>((resolve, reject) => {
+        const open = indexedDB.open('swapsmith-art', 1);
+        open.onsuccess = () => {
+          const req = open.result.transaction('images').objectStore('images').getAll();
+          req.onsuccess = () => resolve(req.result.map((r: { id: string; bytes: number; lastUsed: number }) => ({ id: r.id, bytes: r.bytes, lastUsed: r.lastUsed })));
+          req.onerror = () => reject(req.error);
+        };
+        open.onerror = () => reject(open.error);
+      }),
+  );
+/** Writes rows straight into the cache (`id`, `lastUsed`), or deletes them (`lastUsed` null). */
+export const writeRows = (page: Page, rows: Array<{ id: string; lastUsed: number | null }>) =>
+  page.evaluate(
+    (list) =>
+      new Promise<void>((resolve, reject) => {
+        const open = indexedDB.open('swapsmith-art', 1);
+        open.onsuccess = () => {
+          const tx = open.result.transaction('images', 'readwrite');
+          const store = tx.objectStore('images');
+          for (const r of list) {
+            if (r.lastUsed === null) store.delete(r.id);
+            else store.put({ id: r.id, blob: new Blob([new Uint8Array(10)], { type: 'image/jpeg' }), bytes: 10, lastUsed: r.lastUsed });
+          }
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+        };
+        open.onerror = () => reject(open.error);
+      }),
+    rows,
+  );
+/** The art id the saved game gives a seat (0-based), or undefined. */
+export const artId = (page: Page, seat: number) => page.evaluate((s) => JSON.parse(localStorage.getItem('swapsmith:life') ?? '{}').game?.players?.[s]?.art?.id as string | undefined, seat);
