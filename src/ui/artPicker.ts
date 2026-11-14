@@ -8,6 +8,7 @@ import { ART_TYPES, artQuery, type ArtRef } from '../lib/art';
 import { COLORS } from '../lib/browse';
 import { searchArt } from '../scryfall/art';
 import { ScryfallError, type ScryfallClient } from '../scryfall/client';
+import { isArtUrl } from './artStore';
 import { segmented } from './controls';
 import { h } from './dom';
 
@@ -102,7 +103,14 @@ export function openArtPicker(o: ArtPickerOptions): { close(): void } {
 
   const credit = (r: ArtRef) => `${r.name}, art by ${r.artist}`;
   const cell = (r: ArtRef) => {
-    const b = h('button', { type: 'button', class: 'art-cell', 'aria-label': credit(r), title: credit(r) }, h('img', { src: r.url, alt: '', loading: 'lazy', decoding: 'async' }));
+    // The caption is visible text (a tooltip does not show on touch); the button's name stays the one label.
+    const b = h(
+      'button',
+      { type: 'button', class: 'art-cell', 'aria-label': credit(r), title: credit(r) },
+      h('img', { src: r.url, alt: '', loading: 'lazy', decoding: 'async' }),
+      h('span', { class: 'art-cell-name' }, r.name),
+      h('span', { class: 'art-cell-artist' }, r.artist),
+    );
     b.addEventListener('click', () => void pick(r));
     return h('li', {}, b);
   };
@@ -156,8 +164,10 @@ export function openArtPicker(o: ArtPickerOptions): { close(): void } {
       if (me !== run) return;
       query = q;
       page = next ? page + 1 : 1;
-      grid.append(...res.cards.map(cell));
-      shown += res.cards.length;
+      // Only the art host is ever asked for an image: a crop link anywhere else gets no cell.
+      const cards = res.cards.filter((c) => isArtUrl(c.url));
+      grid.append(...cards.map(cell));
+      shown += cards.length;
       warnings.textContent = res.warnings.join(' ');
       status.textContent = shown > 0 ? `Showing ${shown}` : res.hasMore ? 'No usable art on this page yet.' : 'No art found';
       more.hidden = !res.hasMore;
