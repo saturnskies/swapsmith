@@ -200,3 +200,59 @@ function answerRoles(index: RoleIndex, url: string): { status: number; body: unk
   return data.length ? { status: 200, body: { object: 'list', has_more: false, total_cards: data.length, data } } : { status: 404, body: { object: 'error', status: 404, details: 'Your query didn’t match any cards.' } };
 }
 
+
+/** The recorded art-picker replies (name, artist, no match, ignored term, bad query, random), recorded 2026-11-13. */
+export const artReplies: FixtureMap = load('scryfall-art.json');
+/** A real 626×457 art crop (32 KB), served for every card image the art tests ask for. */
+export const artCrop = readFileSync(new URL('../fixtures/art-crop-island.jpg', import.meta.url));
+
+export interface ArtMock {
+  /** The `q` of every card search that reached Scryfall, in order. */
+  searches: string[];
+  /** How many `/cards/random` requests were made. */
+  randoms: number;
+  /** The card images asked for with `fetch` (the app saving one), not the `<img>` thumbnails. */
+  fetches: string[];
+  /** Hold a kind of reply until the promise settles. */
+  gate: { search?: Promise<unknown>; random?: Promise<unknown>; image?: Promise<unknown> };
+  /** Status for the next replies: a random card or an image can be made to fail. */
+  fail: { random?: boolean; image?: boolean };
+  /** Overrides a search's answer (return null to use the recording). Gets the full `q` and the page number. */
+  answer?: (q: string, page: number) => { status: number; body: unknown } | null;
+  /** The image bytes served for card images, and their type. */
+  image: { body: Buffer; type: string };
+}
+
+/**
+ * Answers the art picker from the recordings: a search the recording holds is answered as recorded; any other search
+ * (a filter combination, a different word) is answered with the recorded name search's cards, so a test can check the
+ * request the filters build without Scryfall applying them. `/cards/random` answers the recorded random card.
+ * Card images come from `art.image` with CORS allowed, so the app can save the bytes.
+ */
+export async function mockArt(page: Page): Promise<ArtMock> {
+  const art: ArtMock = { searches: [], randoms: 0, fetches: [], gate: {}, fail: {}, image: { body: artCrop, type: 'image/jpeg' } };
+  const byName = artReplies['GET /cards/search?q=name%3A%22delver%22+is%3Ahighres&unique=art&order=released&page=1'];
+  const byArtist = artReplies['GET /cards/search?q=a%3A%22quinton+hoover%22+is%3Ahighres&unique=art&order=released&page=1'];
+  await page.route('https://cards.scryfall.io/**', async (route) => {
+    const req = route.request();
+    if (req.resourceType() === 'fetch') art.fetches.push(req.url());
+    if (art.gate.image && req.resourceType() === 'fetch') await art.gate.image;
+    if (art.fail.image && req.resourceType() === 'fetch') return route.fulfill({ status: 500, body: 'no' });
+    return route.fulfill({ status: 200, contentType: art.image.type, headers: { 'access-control-allow-origin': '*' }, body: art.image.body });
+  });
+  await page.route('https://api.scryfall.com/cards/random**', async (route) => {
+    art.randoms += 1;
+    if (art.gate.random) await art.gate.random;
+    if (art.fail.random) return route.fulfill({ status: 500, json: { object: 'error', status: 500, details: 'boom' } });
+    return route.fulfill({ status: 200, json: artReplies['GET /cards/random?q=is%3Ahighres'].body });
+  });
+  await page.route('https://api.scryfall.com/cards/search**', async (route) => {
+    const url = new URL(route.request().url());
+    const q = url.searchParams.get('q') ?? '';
+    art.searches.push(q);
+    if (art.gate.search) await art.gate.search;
+    const hit = art.answer?.(q, Number(url.searchParams.get('page') ?? 1)) ?? artReplies[requestKey('GET', route.request().url())] ?? (q.startsWith('a:') ? byArtist : byName);
+    return route.fulfill({ status: hit.status, json: hit.body });
+  });
+  return art;
+}
