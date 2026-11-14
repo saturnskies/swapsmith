@@ -104,6 +104,57 @@ test.describe('the picker', () => {
     await expect(p).not.toContainText('13');
   });
 
+  test('each cell shows its card name and artist as visible text, readable over the grid', async ({ page }) => {
+    await start(page);
+    const p = await openPicker(page);
+    await search(p, 'delver');
+    const c = cell(p, DUNGEON);
+    await expect(c).toBeVisible();
+    // Visible text, not only a label or tooltip: a touch screen shows no tooltip.
+    await expect(c.locator('.art-cell-name')).toBeVisible();
+    await expect(c.locator('.art-cell-name')).toHaveText('Dungeon Delver');
+    await expect(c.locator('.art-cell-artist')).toBeVisible();
+    await expect(c.locator('.art-cell-artist')).toHaveText('Josh Freydkis');
+    // A long name is cut with an ellipsis instead of growing the cell.
+    const style = await c.locator('.art-cell-name').evaluate((e) => {
+      const s = getComputedStyle(e);
+      return { overflow: s.overflow, textOverflow: s.textOverflow, whiteSpace: s.whiteSpace };
+    });
+    expect(style).toEqual({ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' });
+    // The caption is at least 4.5:1 (AA) against what is behind it.
+    for (const cls of ['.art-cell-name', '.art-cell-artist']) {
+      const colors = await c.locator(cls).evaluate((e) => {
+        let bg = '';
+        for (let n: Element | null = e; n; n = n.parentElement) {
+          const b = getComputedStyle(n).backgroundColor;
+          if (b !== 'rgba(0, 0, 0, 0)' && b !== 'transparent') {
+            bg = b;
+            break;
+          }
+        }
+        return { fg: getComputedStyle(e).color, bg };
+      });
+      expect(contrastRatio(parseColor(colors.fg), parseColor(colors.bg))).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  test('a card whose image is not on Scryfall\'s image host gets no cell', async ({ page }) => {
+    await start(page);
+    const all = (artReplies['GET /cards/search?q=name%3A%22delver%22+is%3Ahighres&unique=art&order=released&page=1'].body as { data: Array<{ name: string; image_uris?: { art_crop: string } }> }).data;
+    const plain = all.filter((c) => c.image_uris?.art_crop.startsWith('https://cards.scryfall.io/'));
+    const hit = structuredClone(plain.slice(0, 2));
+    hit.forEach((c) => (c.image_uris!.art_crop = 'https://tracker.example.com/pixel.jpg'));
+    const good = plain.find((c) => c.name === "Delver's Torch")!;
+    const tracked: string[] = [];
+    page.on('request', (r) => r.url().includes('tracker.example.com') && tracked.push(r.url()));
+    art.answer = () => ({ status: 200, body: { object: 'list', total_cards: 3, has_more: false, data: [...hit, good] } });
+    const p = await openPicker(page);
+    await search(p, 'delver');
+    await expect(p.locator('.art-cell')).toHaveCount(1);
+    await expect(p.getByRole('status').filter({ hasText: 'Showing 1' })).toBeVisible();
+    expect(tracked).toEqual([]);
+  });
+
   test('switching the box to Artist searches a:', async ({ page }) => {
     await start(page);
     const p = await openPicker(page);
@@ -380,6 +431,21 @@ test.describe('art on a tile', () => {
     expect(await tile(page, 0).evaluate((e) => getComputedStyle(e).backgroundColor)).toBe('rgb(179, 38, 30)');
     await expect(tile(page, 0).locator('img')).toHaveCount(0);
     expect(await tile(page, 0).locator('.tile-art').evaluate((e) => getComputedStyle(e).backgroundImage)).toBe('none');
+  });
+
+  test('Remove art does nothing while a random art is still being found', async ({ page }) => {
+    await start(page);
+    await pickDungeon(page);
+    let release!: () => void;
+    art.gate.random = new Promise<void>((r) => (release = r));
+    await random(page, 1).evaluate((b: HTMLButtonElement) => b.click());
+    await expect(NOTE(page, 1)).toContainText('Finding art');
+    await remove(page, 1).evaluate((b: HTMLButtonElement) => b.click());
+    await expect(tile(page, 0)).toHaveAttribute('data-art', 'true');
+    expect(await artId(page, 0)).toBeDefined();
+    release();
+    await expect(NOTE(page, 1)).not.toContainText('Finding art');
+    await expect(tile(page, 0)).toHaveAttribute('data-art', 'true');
   });
 
   test('Remove art returns the seat to its color and is remembered', async ({ page }) => {
