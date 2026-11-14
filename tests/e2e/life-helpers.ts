@@ -31,3 +31,10 @@ export const start = async (page: Page, opts: { players?: number; life?: number;
 export const life = (page: Page, seat: number) => page.locator(`.tile[data-player="${seat}"] .tile-life`);
 export const minus = (page: Page, name: string) => page.getByRole('button', { name: `${name}: lose 1 life` });
 export const plus = (page: Page, name: string) => page.getByRole('button', { name: `${name}: gain 1 life` });
+
+/** Opens Menu → Edit names & colors: the dialog where each seat's name, color and art are set. */
+export const editPlayers = async (page: Page) => {
+  await (await menu(page)).getByRole('button', { name: 'Edit names & colors' }).click();
+  return page.getByRole('dialog', { name: 'Edit players' });
+};
+export const tile = (page: Page, seat: number) => page.locator(`.tile[data-player="${seat}"]`);
