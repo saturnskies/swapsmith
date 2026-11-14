@@ -20,3 +20,17 @@ export async function installNativeBack(): Promise<void> {
     else void App.exitApp();
   });
 }
+
+/**
+ * One short buzz, where the platform offers it (`navigator.vibrate`: Android Chrome and the Android app's WebView; not iOS).
+ * It does nothing under reduced motion, when `vibrate` is missing, or when the browser refuses; it never throws.
+ */
+export function buzz(ms = 80): void {
+  try {
+    if (typeof navigator.vibrate !== 'function') return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    navigator.vibrate(ms);
+  } catch {
+    // A blocked or broken vibrate is not worth a message.
+  }
+}
