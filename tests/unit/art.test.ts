@@ -44,6 +44,14 @@ describe('artRefOf', () => {
     expect(artRefOf(c)).toEqual({ id: 'face-illus', cardId: 'card-1', name: 'Edgar Markov', artist: 'Face Artist', url: 'https://cards.scryfall.io/f.jpg' });
   });
 
+  it("credits the first face's artist when the illustration comes from the face, not the card's combined string", () => {
+    const c = card({ illustration_id: undefined, artist: 'Florey & Scott Okumura', image_uris: undefined, card_faces: [{ name: 'Front', illustration_id: 'face-illus', artist: 'Florey', image_uris: { art_crop: 'https://cards.scryfall.io/f.jpg' } }, { name: 'Back', illustration_id: 'back-illus', artist: 'Scott Okumura', image_uris: { art_crop: 'https://cards.scryfall.io/b.jpg' } }] });
+    expect(artRefOf(c)?.artist).toBe('Florey');
+    // The card's artist stays the credit when the face names none, and when the card's own illustration is used.
+    expect(artRefOf(card({ illustration_id: undefined, artist: 'Both', image_uris: undefined, card_faces: [{ name: 'Front', illustration_id: 'f', image_uris: { art_crop: 'https://cards.scryfall.io/f.jpg' } }] }))?.artist).toBe('Both');
+    expect(artRefOf(card({ artist: 'Top', card_faces: [{ name: 'Front', artist: 'Face' }] }))?.artist).toBe('Top');
+  });
+
   it('builds references from the real two-faced and one-faced cards Scryfall answered (recorded 2026-11-13)', () => {
     const list = (artFixture as unknown as Record<string, { body: { data: ScryCard[] } }>)['GET /cards/search?q=name%3A%22delver%22+is%3Ahighres&unique=art&order=released&page=1'].body.data;
     const twoFaced = list.filter((c) => !c.illustration_id && c.card_faces);
