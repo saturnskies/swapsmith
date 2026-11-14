@@ -20,6 +20,7 @@ Status: **current** = in force or in progress; **draft** = proposed, not approve
 - [ADR-004-apk-signing-and-data-safety.md](decisions/ADR-004-apk-signing-and-data-safety.md) — current, 2026-11-02 — One permanent signing key for every Swapsmith APK, deck backup and restore in the app, and the rules that keep users' decks across updates
 - [ADR-005-edhrec-commander-data.md](decisions/ADR-005-edhrec-commander-data.md) — current, 2026-11-04 — Uses EDHREC's unofficial per-commander JSON (inclusion, synergy, themes, brackets, average deck) as the main recommendation signal, called from the browser, with Scryfall rules as the fallback
 - [ADR-006-cheapest-printing-search-and-bounded-cache.md](decisions/ADR-006-cheapest-printing-search-and-bounded-cache.md) — current, 2026-11-12 — Prices a deck with one cheapest-printing search per ~15 cards instead of downloading every printing, loads printings only when the picker opens, and keeps the reply cache bounded and usable offline for a week
+- [ADR-007-life-counter-art-cache.md](decisions/ADR-007-life-counter-art-cache.md) — current, 2026-11-14 — Life Counter card art is saved as image blobs in its own IndexedDB database with count, size and per-image caps and a keep set, so seats show art offline; why not a URL alone or the service-worker cache
 - [README.md](decisions/README.md) — current, 2026-10-29 — How to write ADRs: naming, front matter, status rules, never rewrite accepted ADRs
 
 ## docs/research/
@@ -50,7 +51,7 @@ Status: **current** = in force or in progress; **draft** = proposed, not approve
 - [2026-11-04-browse-tab.md](superpowers/specs/2026-11-04-browse-tab.md) — current, 2026-11-04 — Browse tab spec — search every card by name, set, type, tribe, keyword, role, color identity, mana value, rarity and price (plus raw Scryfall syntax), image grid or list, sorting, Load more, and a card detail with Add to deck and Mark as owned
 - [2026-11-04-tab-bar-life-counter.md](superpowers/specs/2026-11-04-tab-bar-life-counter.md) — current, 2026-11-04 — Tab bar and Life Counter spec — bottom tabs (Decks, Browse, Life Counter) with hash routes and per-tab place, plus an offline 1–6 player life counter with commander damage, poison, undo, wake lock and a saved game
 - [2026-11-06-swap-from-card.md](superpowers/specs/2026-11-06-swap-from-card.md) — current, 2026-11-06 — Swap from a card design — tap a deck card, see similar cards from decks with the same commander that fit the deck's mechanics, with popularity and a plain comparison side by side, and swap in one tap
-- [2026-11-13-life-counter-art.md](superpowers/specs/2026-11-13-life-counter-art.md) — draft, 2026-11-13 — Life Counter art revamp spec — opens straight into a saved default 2-player 40-life game, card-art tiles from any Scryfall card (search, filters, random, cached offline), accent colours suggested from the art, pod profiles in deck backup, and a splatter-to-skull death effect
+- [2026-11-13-life-counter-art.md](superpowers/specs/2026-11-13-life-counter-art.md) — draft, 2026-11-14 — Life Counter art revamp spec — opens straight into a saved default 2-player 40-life game, card-art tiles from any Scryfall card (search, filters, random, cached offline), accent colours suggested from the art, pod profiles in deck backup, and a splatter-to-skull death effect
 
 ## tutorial/
 
