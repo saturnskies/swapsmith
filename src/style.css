@@ -524,6 +524,9 @@ dialog.picker .notice:not(:empty) { margin-block: 0.5rem; }
 .art-grid { list-style: none; margin: 0.5rem 0; padding: 0; display: grid; gap: 0.5rem; grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr)); }
 .art-cell { display: block; width: 100%; padding: 0; border: 2px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--tag-bg); cursor: pointer; }
 .art-cell img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; }
+.art-cell-name, .art-cell-artist { display: block; padding: 0 0.5rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; color: var(--ink); background: var(--panel); }
+.art-cell-name { padding-top: 0.35rem; font-size: 0.85rem; font-weight: 600; }
+.art-cell-artist { padding-bottom: 0.35rem; font-size: 0.8rem; color: var(--muted); }
 .art-cell:hover { border-color: var(--muted); }
 .art-cell:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 .art-grid[aria-busy='true'] { opacity: 0.6; pointer-events: none; }
