@@ -7,6 +7,7 @@ import { lifeRoute, tabOf, type Tab } from '../lib/nav';
 import { renderBrowse } from './browse';
 import { h } from './dom';
 import { renderHome } from './home';
+import type { Profile } from '../lib/profiles';
 import { createLife } from './life';
 import { renderNewDeck } from './newDeck';
 import { renderPaste } from './paste';
@@ -32,6 +33,8 @@ export interface AppContext {
   refresh(): void;
   /** Overwrites the saved decks (with their owned cards) and view with `next` (used by restore) and saves. */
   replaceStore(next: Store): void;
+  /** The Life Counter's saved player profiles, for Back up and Restore. Reads the Life Counter when called, since it is created after this context. */
+  profiles: { get(): Profile[]; merge(incoming: Profile[]): { added: number; skipped: number } };
 }
 
 export function startApp(root: HTMLElement): void {
@@ -94,6 +97,7 @@ export function startApp(root: HTMLElement): void {
       save();
       touch();
     },
+    profiles: { get: () => life.profiles(), merge: (incoming) => life.mergeProfiles(incoming) },
   };
 
   const banner = persistent
@@ -111,10 +115,10 @@ export function startApp(root: HTMLElement): void {
   const bar = createTabBar();
   document.body.append(bar.el);
   renderBrowse(views.browse, ctx, storage);
-  const life = createLife(storage);
+  const life = createLife(storage, ctx.client);
 
   /** Where each tab was left (its last route and window scroll), for coming back to it. */
-  const last: Record<Tab, string> = { decks: '#/', browse: '#/browse', life: '#/life' };
+  const last: Record<Tab, string> = { decks: '#/', browse: '#/browse', life: lifeRoute() };
   const scroll: Record<Tab, number> = { decks: 0, browse: 0, life: 0 };
   let decksDrawn: string | null = null;
 
@@ -122,12 +126,16 @@ export function startApp(root: HTMLElement): void {
   function render(force = false) {
     const hash = location.hash || '#/';
     const tab = tabOf(hash);
-    if (tab === 'life' && lifeRoute(hash, life.hasGame()) !== hash) {
-      location.replace(lifeRoute(hash, life.hasGame()));
-      return;
+    if (tab === 'life') {
+      // The Life Counter opens into a game, never a setup screen: make sure one exists, then send every Life Counter route to it.
+      life.ensureGame();
+      if (hash !== lifeRoute()) {
+        location.replace(lifeRoute());
+        return;
+      }
     }
     // A game fills the screen: the stylesheet hides the header, footer and tab bar while this is set.
-    document.body.classList.toggle('in-game', tab === 'life' && hash === '#/life/game');
+    document.body.classList.toggle('in-game', tab === 'life');
     const switched = tab !== active;
     if (active && switched) scroll[active] = window.scrollY;
     active = tab;
@@ -150,12 +158,12 @@ export function startApp(root: HTMLElement): void {
         restore = false;
       }
     } else {
-      if (tab === 'life') life.render(views.life, hash);
+      if (tab === 'life') life.render(views.life);
       if (!switched) restore = false;
     }
     window.scrollTo(0, restore ? scroll[tab] : 0);
     // The screen stays awake only while a game is showing.
-    life.setAwake(tab === 'life' && hash === '#/life/game' && life.hasGame());
+    life.setAwake(tab === 'life' && life.hasGame());
   }
 
   function drawDecks(hash: string) {

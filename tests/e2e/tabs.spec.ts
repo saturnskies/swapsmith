@@ -36,17 +36,19 @@ test('shows Decks, Browse and Life Counter, with the current one marked', async 
   await expect(page.getByRole('heading', { name: 'Browse' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Your decks' })).toBeHidden();
 
+  // The Life Counter opens straight into the full-screen game, which hides the bar.
   await tab(page, 'Life Counter').click();
-  await expect(page).toHaveURL(/#\/life$/);
-  await expect(tab(page, 'Life Counter')).toHaveAttribute('aria-current', 'page');
-  await expect(page.getByRole('heading', { name: 'Life Counter' })).toBeVisible();
+  await expect(page).toHaveURL(/#\/life\/game$/);
+  await expect(page.locator('.tile')).toHaveCount(2);
+  await expect(bar(page)).toBeHidden();
 });
 
 test('a reload stays on the tab', async ({ page }) => {
   await page.goto('./#/life');
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'Life Counter' })).toBeVisible();
-  await expect(tab(page, 'Life Counter')).toHaveAttribute('aria-current', 'page');
+  await expect(page).toHaveURL(/#\/life\/game$/);
+  await expect(page.locator('.tile')).toHaveCount(2);
+  await expect(page.locator('[data-tab="life"]')).toBeVisible();
 });
 
 test('Decks keeps a half-typed form when you visit another tab and come back', async ({ page }) => {
@@ -55,7 +57,8 @@ test('Decks keeps a half-typed form when you visit another tab and come back', a
   await field.fill('Edgar');
   await tab(page, 'Life Counter').click();
   await expect(field).toBeHidden();
-  await tab(page, 'Decks').click();
+  // The game hides the bar; the browser's back goes to where we were.
+  await page.goBack();
   await expect(page).toHaveURL(/#\/new$/);
   await expect(field).toHaveValue('Edgar');
 });
@@ -95,12 +98,13 @@ test('Browse and Life Counter stay mounted while hidden', async ({ page }) => {
   await expect(browse).toHaveAttribute('data-mark', 'kept');
 });
 
-test('unknown Life Counter routes fall back to the setup screen', async ({ page }) => {
+test('every Life Counter route lands on the game', async ({ page }) => {
   await page.goto('./#/life/nope');
-  await expect(page).toHaveURL(/#\/life$/);
-  await page.goto('./#/life/game');
-  await expect(page).toHaveURL(/#\/life$/);
-  await expect(page.getByRole('heading', { name: 'Life Counter' })).toBeVisible();
+  await expect(page).toHaveURL(/#\/life\/game$/);
+  await expect(page.locator('.tile')).toHaveCount(2);
+  await page.goto('./#/life');
+  await expect(page).toHaveURL(/#\/life\/game$/);
+  await expect(page.locator('.tile')).toHaveCount(2);
 });
 
 test('the bar does not cover the end of the page', async ({ page }) => {
@@ -124,7 +128,6 @@ test.describe('an open dialog never outlives its tab', () => {
 
   test('the game menu', async ({ page }) => {
     await page.goto('./#/life');
-    await page.getByRole('button', { name: 'Start game' }).click();
     await page.getByRole('button', { name: 'Game menu' }).click();
     await expect(page.getByRole('dialog', { name: 'Game menu' })).toBeVisible();
     await usableAfterLeaving(page);
@@ -132,18 +135,26 @@ test.describe('an open dialog never outlives its tab', () => {
 
   test("a player's counters sheet", async ({ page }) => {
     await page.goto('./#/life');
-    await page.getByRole('button', { name: 'Start game' }).click();
     await page.getByRole('button', { name: 'Player 1: poison and commander damage' }).click();
     await expect(page.getByRole('dialog', { name: 'Player 1: counters' })).toBeVisible();
     await usableAfterLeaving(page);
   });
 
-  test('the replace-game question on the setup screen', async ({ page }) => {
+  for (const sheet of ['New game', 'Defaults']) {
+    test(`the ${sheet} sheet`, async ({ page }) => {
+      await page.goto('./#/life');
+      await page.getByRole('button', { name: 'Game menu' }).click();
+      await page.getByRole('dialog', { name: 'Game menu' }).getByRole('button', { name: sheet }).click();
+      await expect(page.getByRole('dialog', { name: sheet })).toBeVisible();
+      await usableAfterLeaving(page);
+    });
+  }
+
+  test('the replace-game question', async ({ page }) => {
     await page.goto('./#/life');
-    await page.getByRole('button', { name: 'Start game' }).click();
     await page.getByRole('button', { name: 'Game menu' }).click();
-    await page.getByRole('link', { name: 'Leave game' }).click();
-    await page.getByRole('button', { name: 'New game' }).click();
+    await page.getByRole('dialog', { name: 'Game menu' }).getByRole('button', { name: 'New game' }).click();
+    await page.getByRole('dialog', { name: 'New game' }).getByRole('button', { name: 'Start' }).click();
     await expect(page.getByRole('dialog', { name: 'Replace the game in progress?' })).toBeVisible();
     await usableAfterLeaving(page);
   });

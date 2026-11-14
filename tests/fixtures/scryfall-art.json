@@ -1,0 +1,1592 @@
+{
+ "GET /cards/search?q=name%3A%22delver%22+is%3Ahighres&unique=art&order=released&page=1": {
+  "status": 200,
+  "body": {
+   "object": "list",
+   "total_cards": 13,
+   "has_more": false,
+   "data": [
+    {
+     "object": "card",
+     "id": "a808459c-f086-4cb6-a53e-4b9e196c1000",
+     "oracle_id": "edd531b9-f615-4399-8c8c-1c5e18c4acbf",
+     "name": "Delver of Secrets // Insectile Aberration",
+     "layout": "transform",
+     "artist": "Florey & Scott Okumura",
+     "image_status": "highres_scan",
+     "card_faces": [
+      {
+       "name": "Delver of Secrets",
+       "artist": "Florey",
+       "illustration_id": "2b7de362-970f-48a4-99b4-b589437b0657",
+       "image_uris": {
+        "art_crop": "https://cards.scryfall.io/art_crop/front/a/8/a808459c-f086-4cb6-a53e-4b9e196c1000.jpg?1783904222"
+       }
+      },
+      {
+       "name": "Insectile Aberration",
+       "artist": "Scott Okumura",
+       "illustration_id": "d2521e61-67a8-4a87-8ab6-e8825dc3849e",
+       "image_uris": {
+        "art_crop": "https://cards.scryfall.io/art_crop/back/a/8/a808459c-f086-4cb6-a53e-4b9e196c1000.jpg?1783904222"
+       }
+      }
+     ]
+    },
+    {
+     "object": "card",
+     "id": "86142f1e-dd75-4c46-a58d-9386b69a9a1f",
+     "oracle_id": "0073d731-e60d-433a-ac35-a22af855da20",
+     "name": "Dungeon Delver",
+     "layout": "normal",
+     "artist": "Josh Freydkis",
+     "illustration_id": "225c6f11-310b-4b16-b2c1-292b2969330d",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/8/6/86142f1e-dd75-4c46-a58d-9386b69a9a1f.jpg?1783904226"
+     }
+    },
+    {
+     "object": "card",
+     "id": "888fbfaf-dbf9-4045-a79e-d436ef75b3cf",
+     "oracle_id": "edd531b9-f615-4399-8c8c-1c5e18c4acbf",
+     "name": "Delver of Secrets // Insectile Aberration",
+     "layout": "transform",
+     "artist": "Nana Qi & GodMachine",
+     "image_status": "highres_scan",
+     "card_faces": [
+      {
+       "name": "Delver of Secrets",
+       "artist": "Nana Qi",
+       "illustration_id": "a0813bb5-6b51-4e8e-b9ea-d7e5daa0f28d",
+       "image_uris": {
+        "art_crop": "https://cards.scryfall.io/art_crop/front/8/8/888fbfaf-dbf9-4045-a79e-d436ef75b3cf.jpg?1783916540"
+       }
+      },
+      {
+       "name": "Insectile Aberration",
+       "artist": "GodMachine",
+       "illustration_id": "5663c690-9403-455b-ac9c-0feda94b31fb",
+       "image_uris": {
+        "art_crop": "https://cards.scryfall.io/art_crop/back/8/8/888fbfaf-dbf9-4045-a79e-d436ef75b3cf.jpg?1783916540"
+       }
+      }
+     ]
+    },
+    {
+     "object": "card",
+     "id": "cba131bb-b8b3-4577-9f41-4700d9985134",
+     "oracle_id": "0073d731-e60d-433a-ac35-a22af855da20",
+     "name": "Dungeon Delver",
+     "layout": "normal",
+     "artist": "Edgar Sánchez Hidalgo",
+     "illustration_id": "0c694f6c-5dcf-4e6a-9426-d0148588f603",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/c/b/cba131bb-b8b3-4577-9f41-4700d9985134.jpg?1783922789"
+     }
+    },
+    {
+     "object": "card",
+     "id": "a992bbe3-c389-4a4a-927b-dfc01a4cd9be",
+     "oracle_id": "edd531b9-f615-4399-8c8c-1c5e18c4acbf",
+     "name": "Delver of Secrets // Insectile Aberration",
+     "layout": "transform",
+     "artist": "Matt Stewart",
+     "image_status": "highres_scan",
+     "card_faces": [
+      {
+       "name": "Delver of Secrets",
+       "artist": "Matt Stewart",
+       "illustration_id": "5c1a6d64-b62d-43f5-9a0a-4e0e11c2aa5e",
+       "image_uris": {
+        "art_crop": "https://cards.scryfall.io/art_crop/front/a/9/a992bbe3-c389-4a4a-927b-dfc01a4cd9be.jpg?1783924458"
+       }
+      },
+      {
+       "name": "Insectile Aberration",
+       "artist": "Matt Stewart",
+       "illustration_id": "d910136b-81f1-4772-a257-5dac5b8bed59",
+       "image_uris": {
+        "art_crop": "https://cards.scryfall.io/art_crop/back/a/9/a992bbe3-c389-4a4a-927b-dfc01a4cd9be.jpg?1783924458"
+       }
+      }
+     ]
+    },
+    {
+     "object": "card",
+     "id": "abff6c81-65a4-48fa-ba8f-580f87b0344a",
+     "oracle_id": "edd531b9-f615-4399-8c8c-1c5e18c4acbf",
+     "name": "Delver of Secrets // Insectile Aberration",
+     "layout": "transform",
+     "artist": "Matt Stewart",
+     "image_status": "highres_scan",
+     "card_faces": [
+      {
+       "name": "Delver of Secrets",
+       "artist": "Matt Stewart",
+       "illustration_id": "9b572479-d64a-4d61-bd09-2c9a95138ddb",
+       "image_uris": {
+        "art_crop": "https://cards.scryfall.io/art_crop/front/a/b/abff6c81-65a4-48fa-ba8f-580f87b0344a.jpg?1783925652"
+       }
+      },
+      {
+       "name": "Insectile Aberration",
+       "artist": "Matt Stewart",
+       "illustration_id": "83f0906b-d0e5-4725-ab5b-e33ed3387123",
+       "image_uris": {
+        "art_crop": "https://cards.scryfall.io/art_crop/back/a/b/abff6c81-65a4-48fa-ba8f-580f87b0344a.jpg?1783925652"
+       }
+      }
+     ]
+    },
+    {
+     "object": "card",
+     "id": "59b11ff8-f118-4978-87dd-509dc0c8c932",
+     "oracle_id": "5c446a7f-0301-4343-b0df-146cf2db605b",
+     "name": "Lost Mine of Phandelver",
+     "layout": "normal",
+     "artist": "",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/5/9/59b11ff8-f118-4978-87dd-509dc0c8c932.jpg?1783926340"
+     }
+    },
+    {
+     "object": "card",
+     "id": "53df7b80-71bf-4013-ad44-f76eae8ac81b",
+     "oracle_id": "a1c8b833-8c74-4f95-8a47-1dd41ef99361",
+     "name": "Delver's Torch",
+     "layout": "normal",
+     "artist": "Bram Sels",
+     "illustration_id": "88dafef9-4e38-48ad-968b-eeb22133e323",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/5/3/53df7b80-71bf-4013-ad44-f76eae8ac81b.jpg?1783926535"
+     }
+    },
+    {
+     "object": "card",
+     "id": "28059d09-2c7d-4c61-af55-8942107a7c1f",
+     "oracle_id": "edd531b9-f615-4399-8c8c-1c5e18c4acbf",
+     "name": "Delver of Secrets // Insectile Aberration",
+     "layout": "transform",
+     "artist": "Lius Lasahido",
+     "image_status": "highres_scan",
+     "card_faces": [
+      {
+       "name": "Delver of Secrets",
+       "artist": "Lius Lasahido",
+       "illustration_id": "f057ade6-99c3-4fd6-8818-a00bc0b28696",
+       "image_uris": {
+        "art_crop": "https://cards.scryfall.io/art_crop/front/2/8/28059d09-2c7d-4c61-af55-8942107a7c1f.jpg?1783935481"
+       }
+      },
+      {
+       "name": "Insectile Aberration",
+       "artist": "Lius Lasahido",
+       "illustration_id": "7719db45-6774-4005-85ab-ccc6923a1545",
+       "image_uris": {
+        "art_crop": "https://cards.scryfall.io/art_crop/back/2/8/28059d09-2c7d-4c61-af55-8942107a7c1f.jpg?1783935481"
+       }
+      }
+     ]
+    },
+    {
+     "object": "card",
+     "id": "be0e3547-d8cb-4b68-a396-8c8fbc3b2b1c",
+     "oracle_id": "2f299e69-d82b-48c9-b7f5-cf07cd9dced2",
+     "name": "Jungle Delver",
+     "layout": "normal",
+     "artist": "Kieran Yanner",
+     "illustration_id": "ac4193d7-03df-405c-9965-fdcd82388e35",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/b/e/be0e3547-d8cb-4b68-a396-8c8fbc3b2b1c.jpg?1783935724"
+     }
+    },
+    {
+     "object": "card",
+     "id": "36cb477d-85b1-4cb4-a4b7-c700a3a0e148",
+     "oracle_id": "a13cbac0-4c76-4970-b61e-5f4e020ee95c",
+     "name": "Phyrexian Delver",
+     "layout": "normal",
+     "artist": "Igor Kieryluk",
+     "illustration_id": "6d491efc-479f-4610-bb10-598c4971adfb",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/3/6/36cb477d-85b1-4cb4-a4b7-c700a3a0e148.jpg?1783939674"
+     }
+    },
+    {
+     "object": "card",
+     "id": "11bf83bb-c95b-4b4f-9a56-ce7a1816307a",
+     "oracle_id": "edd531b9-f615-4399-8c8c-1c5e18c4acbf",
+     "name": "Delver of Secrets // Insectile Aberration",
+     "layout": "transform",
+     "artist": "Nils Hamm",
+     "image_status": "highres_scan",
+     "card_faces": [
+      {
+       "name": "Delver of Secrets",
+       "artist": "Nils Hamm",
+       "illustration_id": "1c2fee9b-89ea-4ab1-a751-451c3cd65a88",
+       "image_uris": {
+        "art_crop": "https://cards.scryfall.io/art_crop/front/1/1/11bf83bb-c95b-4b4f-9a56-ce7a1816307a.jpg?1783940984"
+       }
+      },
+      {
+       "name": "Insectile Aberration",
+       "artist": "Nils Hamm",
+       "illustration_id": "c2b5f731-771b-4949-90f3-0ad40d676100",
+       "image_uris": {
+        "art_crop": "https://cards.scryfall.io/art_crop/back/1/1/11bf83bb-c95b-4b4f-9a56-ce7a1816307a.jpg?1783940984"
+       }
+      }
+     ]
+    },
+    {
+     "object": "card",
+     "id": "e66d87a5-7b67-4ec5-b5e2-518d67123118",
+     "oracle_id": "a13cbac0-4c76-4970-b61e-5f4e020ee95c",
+     "name": "Phyrexian Delver",
+     "layout": "normal",
+     "artist": "Dana Knutson",
+     "illustration_id": "1df5df06-a445-41c6-9457-a207aef85521",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/e/6/e66d87a5-7b67-4ec5-b5e2-518d67123118.jpg?1783945692"
+     }
+    }
+   ]
+  }
+ },
+ "GET /cards/search?q=a%3A%22quinton+hoover%22+is%3Ahighres&unique=art&order=released&page=1": {
+  "status": 200,
+  "body": {
+   "object": "list",
+   "total_cards": 78,
+   "has_more": false,
+   "data": [
+    {
+     "object": "card",
+     "id": "2733a3cf-624a-430c-97c3-1c521c9a4d57",
+     "oracle_id": "7126be80-cebc-4868-b39d-8b215410f575",
+     "name": "Selenia, the Cursed Heart",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "c95f9d4f-134f-4afc-99f3-b0958bf22220",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/2/7/2733a3cf-624a-430c-97c3-1c521c9a4d57.jpg?1792741761"
+     }
+    },
+    {
+     "object": "card",
+     "id": "69fa2293-f398-4ad8-895e-c739ddea56d0",
+     "oracle_id": "7ef67bae-4af3-47b9-95d2-08f3c5a0b39d",
+     "name": "Stonybrook Schoolmaster",
+     "layout": "normal",
+     "artist": "Quinton Hoover & Val Mayerik",
+     "illustration_id": "1a1d65e2-bc27-42c5-81ec-9cd7740d4f9f",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/6/9/69fa2293-f398-4ad8-895e-c739ddea56d0.jpg?1783942803"
+     }
+    },
+    {
+     "object": "card",
+     "id": "8671abe8-4333-4b23-a87e-58bcc65deef2",
+     "oracle_id": "f69e9629-a7f7-4241-bf0c-c8def7d19d66",
+     "name": "Kithkin Zephyrnaut",
+     "layout": "normal",
+     "artist": "Quinton Hoover & Val Mayerik",
+     "illustration_id": "44bc3ef2-180a-4c7e-95fe-fc947ebd5583",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/8/6/8671abe8-4333-4b23-a87e-58bcc65deef2.jpg?1783942804"
+     }
+    },
+    {
+     "object": "card",
+     "id": "3aaff934-cc79-4a01-a4be-3c4936605e4e",
+     "oracle_id": "61324e37-4b79-4325-bf46-621b4270afe2",
+     "name": "Leaf Gilder",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "77ea1a08-9894-480d-8c75-f5a97c8991ba",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/3/a/3aaff934-cc79-4a01-a4be-3c4936605e4e.jpg?1783942859"
+     }
+    },
+    {
+     "object": "card",
+     "id": "ea2de26e-4cb3-4d7e-b884-54d6056dc9e9",
+     "oracle_id": "c4a99095-38cc-4fd3-b3da-c72a6ccceb25",
+     "name": "Plover Knights",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "938bbc29-94e8-411a-b929-65da75ed12b8",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/e/a/ea2de26e-4cb3-4d7e-b884-54d6056dc9e9.jpg?1783942911"
+     }
+    },
+    {
+     "object": "card",
+     "id": "458031cc-238d-45f0-9a81-b52e82286e0f",
+     "oracle_id": "ec577886-fb25-455b-9c3d-5fd610959436",
+     "name": "Vesuvan Shapeshifter",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "f6e24eaf-c6bf-455f-8e75-00451f4209b4",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/4/5/458031cc-238d-45f0-9a81-b52e82286e0f.jpg?1783943237"
+     }
+    },
+    {
+     "object": "card",
+     "id": "221a5895-bc21-4f10-b5fc-a4980fde843e",
+     "oracle_id": "d44a8f89-b9c0-4e8a-9179-baa0c448a3c9",
+     "name": "Children of Korlis",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "4b0b5de8-f89f-4169-9c2e-69e73bc1c373",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/2/2/221a5895-bc21-4f10-b5fc-a4980fde843e.jpg?1783943257"
+     }
+    },
+    {
+     "object": "card",
+     "id": "8bc2a06d-54f7-436f-b32a-4a8daa199fb8",
+     "oracle_id": "396efb56-7a54-4d91-b2ce-7f3c62c3238b",
+     "name": "Amrou Seekers",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "a72b504c-922b-4710-8658-b5d87ec5fbd9",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/8/b/8bc2a06d-54f7-436f-b32a-4a8daa199fb8.jpg?1783943258"
+     }
+    },
+    {
+     "object": "card",
+     "id": "ea3e05e5-1340-4010-b39b-3571a5829840",
+     "oracle_id": "4c80112a-8ff5-4ca4-8737-b8d499d78982",
+     "name": "Amrou Scout",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "1f2e659f-a499-47f4-b152-e979288ca819",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/e/a/ea3e05e5-1340-4010-b39b-3571a5829840.jpg?1783943259"
+     }
+    },
+    {
+     "object": "card",
+     "id": "84f2c8f5-8e11-4639-b7de-00e4a2cbabee",
+     "oracle_id": "a2c5ee76-6084-413c-bb70-45490d818374",
+     "name": "\"Ach! Hans, Run!\"",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "be49af2a-e561-49d6-b21f-4f3bf451f11b",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/8/4/84f2c8f5-8e11-4639-b7de-00e4a2cbabee.jpg?1783944234"
+     }
+    },
+    {
+     "object": "card",
+     "id": "dcef9e39-c9e9-401a-b389-962877b3d763",
+     "oracle_id": "e37924d4-99be-4e8c-9ea8-e3cfe0e592cb",
+     "name": "Emcee",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "c68240d6-9cd4-4bd2-b3e8-5a6af007583d",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/d/c/dcef9e39-c9e9-401a-b389-962877b3d763.jpg?1783944264"
+     }
+    },
+    {
+     "object": "card",
+     "id": "9c80412d-f20b-4139-9608-e7878880b531",
+     "oracle_id": "0e91a873-a680-4ca2-b073-26aa39376d77",
+     "name": "Yavimaya Ancients",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "f3a33a0a-9e24-4d6a-9628-3507f8a5a4a4",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/9/c/9c80412d-f20b-4139-9608-e7878880b531.jpg?1783945182"
+     }
+    },
+    {
+     "object": "card",
+     "id": "6da5cb6c-253b-44f0-98f9-d75f42c6e14b",
+     "oracle_id": "1f592b83-7838-4466-8bcb-093ac7346c55",
+     "name": "Wandering Stream",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "aa051579-5bfa-41d4-bb36-5fb149301a7b",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/6/d/6da5cb6c-253b-44f0-98f9-d75f42c6e14b.jpg?1783945667"
+     }
+    },
+    {
+     "object": "card",
+     "id": "ee05211e-cf08-4dea-9740-ed06f8682153",
+     "oracle_id": "4ceb49f3-a997-468d-9653-8ca5ceb2bcfb",
+     "name": "Firebrand Ranger",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "d2371023-28ae-40fe-affc-0639aee2b42a",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/e/e/ee05211e-cf08-4dea-9740-ed06f8682153.jpg?1783945685"
+     }
+    },
+    {
+     "object": "card",
+     "id": "f43c30d9-23a5-4872-925d-3427f5f57995",
+     "oracle_id": "05079cee-b190-42d7-b59f-130cb545cab7",
+     "name": "Outbreak",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "d5338c25-7d1c-4aa3-87a9-ed948a7d34ac",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/f/4/f43c30d9-23a5-4872-925d-3427f5f57995.jpg?1783945783"
+     }
+    },
+    {
+     "object": "card",
+     "id": "c09a0bf2-5b2a-4cc0-8918-b218cda0e2b7",
+     "oracle_id": "b34bb2dc-c1af-4d77-b0b3-a0fb342a5fc6",
+     "name": "Forest",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "ab1b6108-c856-4ca9-a309-6784d7b082d4",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/c/0/c09a0bf2-5b2a-4cc0-8918-b218cda0e2b7.jpg?1783946013"
+     }
+    },
+    {
+     "object": "card",
+     "id": "35a91a58-cc8b-47a3-8c53-43c32753a00d",
+     "oracle_id": "71a176ce-cbe7-4cec-a2ca-58abf59ad964",
+     "name": "Pyromancy",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "f72d8a70-92fd-4a14-84c2-62aec8a7816f",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/3/5/35a91a58-cc8b-47a3-8c53-43c32753a00d.jpg?1783946233"
+     }
+    },
+    {
+     "object": "card",
+     "id": "294aa7fc-12be-4722-b288-de14a28919b2",
+     "oracle_id": "97bdfbe0-7048-4157-8a58-5b17410750ab",
+     "name": "Tragic Poet",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "673aeb21-31f2-4983-9a9c-1389976938e2",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/2/9/294aa7fc-12be-4722-b288-de14a28919b2.jpg?1783946249"
+     }
+    },
+    {
+     "object": "card",
+     "id": "573cf5e6-35ee-4eb6-990a-524ba7335797",
+     "oracle_id": "35caa378-440d-41a1-8ce4-174bfb7c16ac",
+     "name": "Incoming!",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "8b42fc7b-2943-4f8d-a1e9-8bf0c333454c",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/5/7/573cf5e6-35ee-4eb6-990a-524ba7335797.jpg?1783946422"
+     }
+    },
+    {
+     "object": "card",
+     "id": "23bc822d-a028-4162-bf23-6ff4b9f43688",
+     "oracle_id": "b026a2da-59e9-4b26-9094-a1cc2a5b95ff",
+     "name": "Goblin Tutor",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "1a7e2b3c-3990-415f-9c23-12525b521c97",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/2/3/23bc822d-a028-4162-bf23-6ff4b9f43688.jpg?1783946428"
+     }
+    },
+    {
+     "object": "card",
+     "id": "1285c125-e145-4565-a029-352ac6adf688",
+     "oracle_id": "4c39b74c-db93-4dba-8ce3-3683b8cfaac5",
+     "name": "Denied!",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "ef4d77b8-cd24-4fa6-ae80-7b12de75f689",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/1/2/1285c125-e145-4565-a029-352ac6adf688.jpg?1783946434"
+     }
+    },
+    {
+     "object": "card",
+     "id": "abebee47-5205-4855-ae72-475b58a02240",
+     "oracle_id": "b34bb2dc-c1af-4d77-b0b3-a0fb342a5fc6",
+     "name": "Forest",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "1fcd0b72-5466-4661-8456-20103468b50e",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/a/b/abebee47-5205-4855-ae72-475b58a02240.jpg?1783946440"
+     }
+    },
+    {
+     "object": "card",
+     "id": "89f4fcbb-86a8-475f-a547-d59014bb7a98",
+     "oracle_id": "b34bb2dc-c1af-4d77-b0b3-a0fb342a5fc6",
+     "name": "Forest",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "decff1d0-bcbb-42aa-b48a-d90c0843f798",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/8/9/89f4fcbb-86a8-475f-a547-d59014bb7a98.jpg?1783946440"
+     }
+    },
+    {
+     "object": "card",
+     "id": "afe165cd-8ef7-408e-ae56-3c6a0cc4e409",
+     "oracle_id": "e05f3236-dc82-4353-87ab-d26ae7caa0e7",
+     "name": "Fugitive Druid",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "917271e9-9c6e-4f02-be0f-1324cb690040",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/a/f/afe165cd-8ef7-408e-ae56-3c6a0cc4e409.jpg?1783946618"
+     }
+    },
+    {
+     "object": "card",
+     "id": "f99c10b5-b93b-40c3-936c-d1b81b49c5a4",
+     "oracle_id": "557d2af0-04c5-461d-826b-7208c4535dc2",
+     "name": "Elvish Fury",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "6928dfc7-91c7-48a0-ae5b-a2f4c76c1a35",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/f/9/f99c10b5-b93b-40c3-936c-d1b81b49c5a4.jpg?1783946619"
+     }
+    },
+    {
+     "object": "card",
+     "id": "61adc314-cfb2-4fdd-925c-cc1dc4692992",
+     "oracle_id": "cad0f865-62e0-47ba-84ae-8e97cb52bbd1",
+     "name": "Pallimud",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "cd1e4a8e-0524-454a-b046-a3e0f1eab2ae",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/6/1/61adc314-cfb2-4fdd-925c-cc1dc4692992.jpg?1783946626"
+     }
+    },
+    {
+     "object": "card",
+     "id": "22f84143-5912-43ca-a274-f26ed0dbadd0",
+     "oracle_id": "b5b46c99-1cc1-465a-a831-3fd6665ef560",
+     "name": "Canyon Drake",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "de52be4a-a9a5-496d-a87d-a0807b8238eb",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/2/2/22f84143-5912-43ca-a274-f26ed0dbadd0.jpg?1783946632"
+     }
+    },
+    {
+     "object": "card",
+     "id": "75c5cfd1-3f7c-4250-a84d-8db83c6d7eb7",
+     "oracle_id": "a4a8af4e-8686-45ba-94fd-ccf6cc8adaae",
+     "name": "Whispers of the Muse",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "1b1a7c05-b100-4cbb-b5e8-b63ae3fc85fc",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/7/5/75c5cfd1-3f7c-4250-a84d-8db83c6d7eb7.jpg?1783946647"
+     }
+    },
+    {
+     "object": "card",
+     "id": "387b9236-1241-44b7-9436-1fbc9970b692",
+     "oracle_id": "9971697b-2acc-4bc2-a44e-074d03a51df7",
+     "name": "Archangel",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "d4aa6f8b-a9e8-468e-af73-ac3c2cb63ec3",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/3/8/387b9236-1241-44b7-9436-1fbc9970b692.jpg?1783946853"
+     }
+    },
+    {
+     "object": "card",
+     "id": "91708e45-f9a1-4c2e-973d-bfc294926c93",
+     "oracle_id": "0e91a873-a680-4ca2-b073-26aa39376d77",
+     "name": "Yavimaya Ancients",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "814c96c7-607d-43d7-88f9-d1633f6c5c43",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/9/1/91708e45-f9a1-4c2e-973d-bfc294926c93.jpg?1783947166"
+     }
+    },
+    {
+     "object": "card",
+     "id": "6bdde5d2-3dd2-4eaa-9c52-4ad400b56ed1",
+     "oracle_id": "4137ee86-bbf0-49dc-87c5-b48a384baac4",
+     "name": "Gorilla Chieftain",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "82d8751e-0aae-4b3a-a7dc-8b5ebaad4b06",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/6/b/6bdde5d2-3dd2-4eaa-9c52-4ad400b56ed1.jpg?1783947169"
+     }
+    },
+    {
+     "object": "card",
+     "id": "47f1eedd-7021-4cce-a808-2e9384a5ef15",
+     "oracle_id": "4137ee86-bbf0-49dc-87c5-b48a384baac4",
+     "name": "Gorilla Chieftain",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "88c0330c-ea0c-449a-9f9c-7898ecfc0e50",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/4/7/47f1eedd-7021-4cce-a808-2e9384a5ef15.jpg?1783947170"
+     }
+    },
+    {
+     "object": "card",
+     "id": "365820e4-7b43-423b-98ce-f383eb4d2a96",
+     "oracle_id": "e8cc9f83-4e4c-4820-9a7a-f82f728e9767",
+     "name": "Ivory Gargoyle",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "99ff0004-aefc-4ec5-ba46-ab7bba589036",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/3/6/365820e4-7b43-423b-98ce-f383eb4d2a96.jpg?1783947203"
+     }
+    },
+    {
+     "object": "card",
+     "id": "49301c19-55a0-4146-9474-0b86cd320e31",
+     "oracle_id": "1e381361-7404-4654-bfb4-5ea65f6e4dce",
+     "name": "Elkin Bottle",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "19d16437-a725-4156-8dba-00032e8ccceb",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/4/9/49301c19-55a0-4146-9474-0b86cd320e31.jpg?1783947461"
+     }
+    },
+    {
+     "object": "card",
+     "id": "73c07c87-0e44-4a5a-92b7-728350cd02de",
+     "oracle_id": "de691eed-d90b-48f9-bae4-f982767f2bfd",
+     "name": "Arcum's Whistle",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "802f29bd-8b06-43c2-ab19-6b10bffddccd",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/7/3/73c07c87-0e44-4a5a-92b7-728350cd02de.jpg?1783947461"
+     }
+    },
+    {
+     "object": "card",
+     "id": "ef5297cb-e763-4871-9cd3-0e2dbcc52095",
+     "oracle_id": "32c10a3e-85b0-49af-9b23-81d0b7e407df",
+     "name": "Balduvian Bears",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "a884ef63-3182-482d-9d58-b983c20340f4",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/e/f/ef5297cb-e763-4871-9cd3-0e2dbcc52095.jpg?1783947481"
+     }
+    },
+    {
+     "object": "card",
+     "id": "7ff511f3-416e-4919-acd6-fd8183bf5c60",
+     "oracle_id": "9b7a0c9d-1045-4fc0-b5e3-18616106da08",
+     "name": "Orcish Healer",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "e50504ee-b443-446b-8ef1-a8b482761ed7",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/7/f/7ff511f3-416e-4919-acd6-fd8183bf5c60.jpg?1783947484"
+     }
+    },
+    {
+     "object": "card",
+     "id": "7dd9b214-d9fe-4c2e-b45b-7145ad98c408",
+     "oracle_id": "d6d84884-4a58-4187-aa5c-20b39b379590",
+     "name": "Karplusan Yeti",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "0f188bd0-9311-4d70-8d0a-28150ad8c880",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/7/d/7dd9b214-d9fe-4c2e-b45b-7145ad98c408.jpg?1783947488"
+     }
+    },
+    {
+     "object": "card",
+     "id": "fd368eb6-72f0-42d4-afa5-3daa7de949ff",
+     "oracle_id": "a40c52ee-4b45-4b14-8fbc-6529b42bfc9d",
+     "name": "Spoils of Evil",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "4bfa8f6e-f013-4c1b-b207-315c3ceff6a2",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/f/d/fd368eb6-72f0-42d4-afa5-3daa7de949ff.jpg?1783947494"
+     }
+    },
+    {
+     "object": "card",
+     "id": "717c5dda-8e38-4c76-b241-685198402284",
+     "oracle_id": "8fa93c01-f9ea-4d48-a040-418d1ca6be19",
+     "name": "Krovikan Vampire",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "f1b7cf7f-9b8e-4ef4-b937-8e1641a9ee00",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/7/1/717c5dda-8e38-4c76-b241-685198402284.jpg?1783947499"
+     }
+    },
+    {
+     "object": "card",
+     "id": "4f3f4d4e-ca4a-4fba-b9fd-cd1d9457cfa1",
+     "oracle_id": "d57409dc-22fa-40c1-a043-cab94d5f3b5f",
+     "name": "Mistfolk",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "9e0dbab3-d3d6-464c-86ad-693d6861bd07",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/4/f/4f3f4d4e-ca4a-4fba-b9fd-cd1d9457cfa1.jpg?1783947512"
+     }
+    },
+    {
+     "object": "card",
+     "id": "17eeeef2-2ced-42b8-a5e0-1095c9e13b02",
+     "oracle_id": "d7c81b3e-8082-4aaf-8979-2717d118234c",
+     "name": "Illusions of Grandeur",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "568e0070-2808-47db-918e-6bcfc41248e5",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/1/7/17eeeef2-2ced-42b8-a5e0-1095c9e13b02.jpg?1783947513"
+     }
+    },
+    {
+     "object": "card",
+     "id": "74859723-8ddf-4ee6-a0a7-87192c84e8ad",
+     "oracle_id": "3354c3d3-5713-4139-beb2-4fa17f6b47d9",
+     "name": "Balduvian Shaman",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "76c41ac7-60e0-44d7-823c-d092b70454bf",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/7/4/74859723-8ddf-4ee6-a0a7-87192c84e8ad.jpg?1783947518"
+     }
+    },
+    {
+     "object": "card",
+     "id": "0ba7526f-dba8-4483-b925-946164fc0ae9",
+     "oracle_id": "287cd5e8-51e2-42a4-a139-c112ff89706d",
+     "name": "Adarkar Unicorn",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "7fd4243b-6ea0-4b7a-b21e-f15c4e510310",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/0/b/0ba7526f-dba8-4483-b925-946164fc0ae9.jpg?1783947531"
+     }
+    },
+    {
+     "object": "card",
+     "id": "907a3396-706b-4ca2-9973-bca758986032",
+     "oracle_id": "1d9b8859-14e3-4bbe-ad92-916b25a37b31",
+     "name": "Raiding Party",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "b989da8b-3c75-408c-bd3e-cb1d5333d467",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/9/0/907a3396-706b-4ca2-9973-bca758986032.jpg?1783947890"
+     }
+    },
+    {
+     "object": "card",
+     "id": "334004e6-bf8c-4a4e-a30c-1537a99819c9",
+     "oracle_id": "a3b66180-ee08-4bef-90aa-7859dc77cb10",
+     "name": "Orcish Veteran",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "82059cc6-6583-4445-8f6c-b495dd6fc340",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/3/3/334004e6-bf8c-4a4e-a30c-1537a99819c9.jpg?1783947890"
+     }
+    },
+    {
+     "object": "card",
+     "id": "58e125c6-81dc-4907-aad2-2ccd1cb166f0",
+     "oracle_id": "992d9a72-d34d-47d7-96fb-37f0efb515ef",
+     "name": "Hymn to Tourach",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "9f9ebb66-123f-4b69-872a-969f967cf3d7",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/5/8/58e125c6-81dc-4907-aad2-2ccd1cb166f0.jpg?1783947902"
+     }
+    },
+    {
+     "object": "card",
+     "id": "2b3cc91d-6f87-4f2e-b3c7-8181d19a1f0b",
+     "oracle_id": "8dee4577-0315-4c9f-ab1c-0c68e2ab6a76",
+     "name": "Vodalian Mage",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "3f53c570-dc09-440d-917a-7d8117c80405",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/2/b/2b3cc91d-6f87-4f2e-b3c7-8181d19a1f0b.jpg?1783947907"
+     }
+    },
+    {
+     "object": "card",
+     "id": "d6ffeab4-83b1-4414-ae72-e59a2354ea15",
+     "oracle_id": "5d02b0d9-cc53-4967-84bb-8b7f5c489b5c",
+     "name": "Homarid",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "bde7f3c8-3ca4-4dc4-b01a-318bef817b2d",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/d/6/d6ffeab4-83b1-4414-ae72-e59a2354ea15.jpg?1783947913"
+     }
+    },
+    {
+     "object": "card",
+     "id": "80c9070a-8c70-480e-a476-e00f8e2c71b9",
+     "oracle_id": "3ec1ccd7-4970-4032-be7a-9e76ca6a139e",
+     "name": "Wand of Ith",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "72abd40b-e8ed-42d8-890a-20966acba1a8",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/8/0/80c9070a-8c70-480e-a476-e00f8e2c71b9.jpg?1783947923"
+     }
+    },
+    {
+     "object": "card",
+     "id": "dc47e322-f8b8-4685-b035-fda0cc433e6b",
+     "oracle_id": "95560508-7ac9-4be9-8a3f-3c7d5b52807b",
+     "name": "Fellwar Stone",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "2653a045-2f65-47ce-b526-1d650aedbe21",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/d/c/dc47e322-f8b8-4685-b035-fda0cc433e6b.jpg?1783947926"
+     }
+    },
+    {
+     "object": "card",
+     "id": "8aabd80f-a18a-4bc1-9f05-4c3a63de77ce",
+     "oracle_id": "a2c5a504-5c8f-4c1b-a8b1-4e045aee4673",
+     "name": "Marsh Goblins",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "1aa99aa7-ca5c-4e00-8408-1a7f08eb4a40",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/8/a/8aabd80f-a18a-4bc1-9f05-4c3a63de77ce.jpg?1783947928"
+     }
+    },
+    {
+     "object": "card",
+     "id": "ff99543d-86a1-44f8-88ec-aaec071d6c05",
+     "oracle_id": "228f0afa-146b-4564-a380-71595cdf1ef4",
+     "name": "Land Leeches",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "86036ca0-6c86-4a6b-a81c-0f0ea49c0703",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/f/f/ff99543d-86a1-44f8-88ec-aaec071d6c05.jpg?1783947931"
+     }
+    },
+    {
+     "object": "card",
+     "id": "6a615650-4da3-4efc-aa5e-c1f2c4f79478",
+     "oracle_id": "3a7478d7-b33e-4227-8cc3-b30643624d56",
+     "name": "Carnivorous Plant",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "ad815c32-1eca-4056-b0d0-fa178c6dcec8",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/6/a/6a615650-4da3-4efc-aa5e-c1f2c4f79478.jpg?1783947933"
+     }
+    },
+    {
+     "object": "card",
+     "id": "c1ba83ab-83f5-421d-bba1-0f925870b5c8",
+     "oracle_id": "7485cf25-eb41-4397-be13-7f0b8c10c70a",
+     "name": "Ball Lightning",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "5a032ef0-d987-4229-b150-6586bac38142",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/c/1/c1ba83ab-83f5-421d-bba1-0f925870b5c8.jpg?1783947937"
+     }
+    },
+    {
+     "object": "card",
+     "id": "348a467a-4661-4fdb-af1d-9171a1a930d9",
+     "oracle_id": "35a717ea-bd32-4714-b402-de7f15398e52",
+     "name": "Nameless Race",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "d34de313-b62d-4d66-860a-c4c78fe6a3e1",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/3/4/348a467a-4661-4fdb-af1d-9171a1a930d9.jpg?1783947938"
+     }
+    },
+    {
+     "object": "card",
+     "id": "a131605a-f646-4745-a1e4-48d155a3d94f",
+     "oracle_id": "6698b059-f1ed-4023-9d44-fbdf39fb159a",
+     "name": "Grave Robbers",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "aded111c-6920-4c39-89a8-cf7d6153e0f0",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/a/1/a131605a-f646-4745-a1e4-48d155a3d94f.jpg?1783947938"
+     }
+    },
+    {
+     "object": "card",
+     "id": "951b6c10-cbba-44b6-aae2-2c386b7ebacb",
+     "oracle_id": "3da87e58-6a4b-48c3-873c-bc654277d4df",
+     "name": "Drowned",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "46485c7d-ed39-4523-a2eb-95fdcf5fa7e6",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/9/5/951b6c10-cbba-44b6-aae2-2c386b7ebacb.jpg?1783947945"
+     }
+    },
+    {
+     "object": "card",
+     "id": "1e03d335-d259-4ab4-814f-9333cfd3afc9",
+     "oracle_id": "d5ea9176-30c1-4152-9086-322f39245f46",
+     "name": "Preacher",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "e1055863-1210-451e-a562-f87a458ea4c0",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/1/e/1e03d335-d259-4ab4-814f-9333cfd3afc9.jpg?1783947946"
+     }
+    },
+    {
+     "object": "card",
+     "id": "92808879-895f-4e65-854c-2c92f170a1e3",
+     "oracle_id": "aeaccab9-3e2c-4a40-a483-52c4972b2014",
+     "name": "Vesuvan Doppelganger",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "5994977a-3846-494b-a620-c00ade6b40ba",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/9/2/92808879-895f-4e65-854c-2c92f170a1e3.jpg?1783948001"
+     }
+    },
+    {
+     "object": "card",
+     "id": "0370330d-83d9-44d2-a1ed-c4827edc60fd",
+     "oracle_id": "37c49483-bef6-47c6-9354-ead8560d48da",
+     "name": "Pradesh Gypsies",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "07121780-50b2-457f-b744-21d24c3383f2",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/0/3/0370330d-83d9-44d2-a1ed-c4827edc60fd.jpg?1783948046"
+     }
+    },
+    {
+     "object": "card",
+     "id": "b9527c2a-23bb-4d33-9e72-6e0ab3de0e6b",
+     "oracle_id": "38a7d4ef-d296-4896-9b6b-2fd3ad518243",
+     "name": "Pixie Queen",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "e8dce4c7-efe5-4609-8701-c95882377930",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/b/9/b9527c2a-23bb-4d33-9e72-6e0ab3de0e6b.jpg?1783948046"
+     }
+    },
+    {
+     "object": "card",
+     "id": "a3e81250-52c3-49f6-be43-17c34339e177",
+     "oracle_id": "b067aa04-5977-4371-85d1-78d2884df03f",
+     "name": "Emerald Dragonfly",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "978da8f5-fea7-4845-85df-e819a72adfe2",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/a/3/a3e81250-52c3-49f6-be43-17c34339e177.jpg?1783948048"
+     }
+    },
+    {
+     "object": "card",
+     "id": "640a161d-ad7b-4e5b-8f2d-d3753cb9daa3",
+     "oracle_id": "5456f00c-0bef-4c14-902f-f5c14475f284",
+     "name": "Aisling Leprechaun",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "12a1c4ac-0f9a-4da4-bf58-d61c71b9f697",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/6/4/640a161d-ad7b-4e5b-8f2d-d3753cb9daa3.jpg?1783948050"
+     }
+    },
+    {
+     "object": "card",
+     "id": "baae02e4-7db9-4a7b-a4ee-ecb22fcb77bd",
+     "oracle_id": "5542afeb-285f-4889-9d09-46ce20d0d189",
+     "name": "Lesser Werewolf",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "571b8ed2-5b17-44ba-96ce-e3d7a358ee90",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/b/a/baae02e4-7db9-4a7b-a4ee-ecb22fcb77bd.jpg?1783948064"
+     }
+    },
+    {
+     "object": "card",
+     "id": "d1aa37c8-98fa-4984-b09b-cf65ad84e97b",
+     "oracle_id": "5bb4961f-0a24-40f8-bfba-8618a9375c93",
+     "name": "Headless Horseman",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "a00ac18c-b7ea-4688-9d49-b6671091677e",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/d/1/d1aa37c8-98fa-4984-b09b-cf65ad84e97b.jpg?1783948066"
+     }
+    },
+    {
+     "object": "card",
+     "id": "2a1e7796-fbfb-4976-879f-bb748429d5c7",
+     "oracle_id": "e0165326-f1a6-4fc0-94c1-4b33f24d36f5",
+     "name": "Brine Hag",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "6c40b26e-66b0-45f1-a8b0-74c4e78b7397",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/2/a/2a1e7796-fbfb-4976-879f-bb748429d5c7.jpg?1783948077"
+     }
+    },
+    {
+     "object": "card",
+     "id": "8f649cb5-e19c-453f-b062-4fd452d92257",
+     "oracle_id": "2155864e-5788-4e72-a800-e2cf25cf59a7",
+     "name": "Tundra Wolves",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "8fabd5dc-85ae-45f6-bb7b-89312aa80f5c",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/8/f/8f649cb5-e19c-453f-b062-4fd452d92257.jpg?1783948079"
+     }
+    },
+    {
+     "object": "card",
+     "id": "ef3651d4-969c-464d-a444-40a640d0c6ba",
+     "oracle_id": "5948381a-419d-4b8b-8ea2-ea623cb0d606",
+     "name": "Elder Land Wurm",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "3e205d1a-8ed0-41a6-a47d-8c026e702e2f",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/e/f/ef3651d4-969c-464d-a444-40a640d0c6ba.jpg?1783948087"
+     }
+    },
+    {
+     "object": "card",
+     "id": "cbce1c55-123c-4a05-bde4-18a1601fcc5a",
+     "oracle_id": "79644192-8f99-4d04-b151-6f74a4dbda0a",
+     "name": "Amrou Kithkin",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "e4fa71f4-902e-4f96-ad4d-eb17604653eb",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/c/b/cbce1c55-123c-4a05-bde4-18a1601fcc5a.jpg?1783948088"
+     }
+    },
+    {
+     "object": "card",
+     "id": "d183cc80-a9ce-4290-bf65-f8202f508ac0",
+     "oracle_id": "d68c65b0-beb9-4a25-b868-339303959b1f",
+     "name": "Proposal",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "3cab051a-4fae-4411-802b-67e0b703853c",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/d/1/d183cc80-a9ce-4290-bf65-f8202f508ac0.jpg?1783948600"
+     }
+    },
+    {
+     "object": "card",
+     "id": "13a68a17-22ee-47c9-870a-83e911862b94",
+     "oracle_id": "5ba73182-30a7-4bad-9cb6-c0feecc2db33",
+     "name": "Meekstone",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "5a023a44-9213-4009-825e-70c8ca034f0b",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/1/3/13a68a17-22ee-47c9-870a-83e911862b94.jpg?1783948664"
+     }
+    },
+    {
+     "object": "card",
+     "id": "b7b7aa34-b4f8-41b4-82ce-ab2e204c3bf4",
+     "oracle_id": "89390a33-b289-4edd-a114-6616e49a49c2",
+     "name": "Regeneration",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "feeb6e73-f2a5-4e49-895c-542de94601da",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/b/7/b7b7aa34-b4f8-41b4-82ce-ab2e204c3bf4.jpg?1783948673"
+     }
+    },
+    {
+     "object": "card",
+     "id": "a6d492b7-b0b3-420e-8d00-6dacb11de77e",
+     "oracle_id": "e8e35b49-8cfb-4fb5-89aa-8050f15b11bf",
+     "name": "Earthbind",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "bc83c494-945b-4d13-92b9-203a78ae5ef1",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/a/6/a6d492b7-b0b3-420e-8d00-6dacb11de77e.jpg?1783948687"
+     }
+    },
+    {
+     "object": "card",
+     "id": "8105973c-a94d-444c-ba20-ab0fa978bee8",
+     "oracle_id": "c58dfcbf-49e6-4ef0-bd31-ebd81b0cfa41",
+     "name": "Nettling Imp",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "7d961530-fe2f-42c4-9891-f6a9dfd35d28",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/8/1/8105973c-a94d-444c-ba20-ab0fa978bee8.jpg?1783948692"
+     }
+    },
+    {
+     "object": "card",
+     "id": "e78db688-93a2-47f5-9aa5-9158a72cd973",
+     "oracle_id": "74f10b9a-a286-49b2-bfa1-a427ff041bd4",
+     "name": "Darkpact",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "4f6f4f77-9100-47da-a94d-5d00c57876f2",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/e/7/e78db688-93a2-47f5-9aa5-9158a72cd973.jpg?1783948697"
+     }
+    },
+    {
+     "object": "card",
+     "id": "0eb8f591-d763-49bf-8ef9-86265aaa72f7",
+     "oracle_id": "2ff92886-5c17-47a4-a02b-a97432d9203e",
+     "name": "Feedback",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "aa256e54-afd7-434c-9b9f-69f14e41b0d2",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/0/e/0eb8f591-d763-49bf-8ef9-86265aaa72f7.jpg?1783948705"
+     }
+    },
+    {
+     "object": "card",
+     "id": "a2788d69-6a3a-42f0-8736-cc6b57755ecd",
+     "oracle_id": "34515b16-c9a4-4f98-8c77-416a7a523407",
+     "name": "Wrath of God",
+     "layout": "normal",
+     "artist": "Quinton Hoover",
+     "illustration_id": "e87a70b0-4485-4362-9a1d-7c320cd7755e",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/a/2/a2788d69-6a3a-42f0-8736-cc6b57755ecd.jpg?1783948708"
+     }
+    }
+   ]
+  }
+ },
+ "GET /cards/search?q=name%3A%22zzzzqq%22+is%3Ahighres&unique=art&order=released&page=1": {
+  "status": 404,
+  "body": {
+   "object": "error",
+   "code": "not_found",
+   "status": 404,
+   "details": "Your query didn’t match any cards. Adjust your search terms or refer to the syntax guide at https://scryfall.com/docs/reference"
+  }
+ },
+ "GET /cards/search?q=name%3A%22delver%22+%28bogus%3Athing%29+is%3Ahighres&unique=art&order=released&page=1": {
+  "status": 200,
+  "body": {
+   "object": "list",
+   "total_cards": 13,
+   "has_more": false,
+   "warnings": [
+    "Invalid expression “bogus:thing” was ignored. Unknown keyword “bogus”."
+   ],
+   "data": [
+    {
+     "object": "card",
+     "id": "a808459c-f086-4cb6-a53e-4b9e196c1000",
+     "oracle_id": "edd531b9-f615-4399-8c8c-1c5e18c4acbf",
+     "name": "Delver of Secrets // Insectile Aberration",
+     "layout": "transform",
+     "artist": "Florey & Scott Okumura",
+     "image_status": "highres_scan",
+     "card_faces": [
+      {
+       "name": "Delver of Secrets",
+       "artist": "Florey",
+       "illustration_id": "2b7de362-970f-48a4-99b4-b589437b0657",
+       "image_uris": {
+        "art_crop": "https://cards.scryfall.io/art_crop/front/a/8/a808459c-f086-4cb6-a53e-4b9e196c1000.jpg?1783904222"
+       }
+      },
+      {
+       "name": "Insectile Aberration",
+       "artist": "Scott Okumura",
+       "illustration_id": "d2521e61-67a8-4a87-8ab6-e8825dc3849e",
+       "image_uris": {
+        "art_crop": "https://cards.scryfall.io/art_crop/back/a/8/a808459c-f086-4cb6-a53e-4b9e196c1000.jpg?1783904222"
+       }
+      }
+     ]
+    },
+    {
+     "object": "card",
+     "id": "86142f1e-dd75-4c46-a58d-9386b69a9a1f",
+     "oracle_id": "0073d731-e60d-433a-ac35-a22af855da20",
+     "name": "Dungeon Delver",
+     "layout": "normal",
+     "artist": "Josh Freydkis",
+     "illustration_id": "225c6f11-310b-4b16-b2c1-292b2969330d",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/8/6/86142f1e-dd75-4c46-a58d-9386b69a9a1f.jpg?1783904226"
+     }
+    },
+    {
+     "object": "card",
+     "id": "888fbfaf-dbf9-4045-a79e-d436ef75b3cf",
+     "oracle_id": "edd531b9-f615-4399-8c8c-1c5e18c4acbf",
+     "name": "Delver of Secrets // Insectile Aberration",
+     "layout": "transform",
+     "artist": "Nana Qi & GodMachine",
+     "image_status": "highres_scan",
+     "card_faces": [
+      {
+       "name": "Delver of Secrets",
+       "artist": "Nana Qi",
+       "illustration_id": "a0813bb5-6b51-4e8e-b9ea-d7e5daa0f28d",
+       "image_uris": {
+        "art_crop": "https://cards.scryfall.io/art_crop/front/8/8/888fbfaf-dbf9-4045-a79e-d436ef75b3cf.jpg?1783916540"
+       }
+      },
+      {
+       "name": "Insectile Aberration",
+       "artist": "GodMachine",
+       "illustration_id": "5663c690-9403-455b-ac9c-0feda94b31fb",
+       "image_uris": {
+        "art_crop": "https://cards.scryfall.io/art_crop/back/8/8/888fbfaf-dbf9-4045-a79e-d436ef75b3cf.jpg?1783916540"
+       }
+      }
+     ]
+    },
+    {
+     "object": "card",
+     "id": "cba131bb-b8b3-4577-9f41-4700d9985134",
+     "oracle_id": "0073d731-e60d-433a-ac35-a22af855da20",
+     "name": "Dungeon Delver",
+     "layout": "normal",
+     "artist": "Edgar Sánchez Hidalgo",
+     "illustration_id": "0c694f6c-5dcf-4e6a-9426-d0148588f603",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/c/b/cba131bb-b8b3-4577-9f41-4700d9985134.jpg?1783922789"
+     }
+    },
+    {
+     "object": "card",
+     "id": "a992bbe3-c389-4a4a-927b-dfc01a4cd9be",
+     "oracle_id": "edd531b9-f615-4399-8c8c-1c5e18c4acbf",
+     "name": "Delver of Secrets // Insectile Aberration",
+     "layout": "transform",
+     "artist": "Matt Stewart",
+     "image_status": "highres_scan",
+     "card_faces": [
+      {
+       "name": "Delver of Secrets",
+       "artist": "Matt Stewart",
+       "illustration_id": "5c1a6d64-b62d-43f5-9a0a-4e0e11c2aa5e",
+       "image_uris": {
+        "art_crop": "https://cards.scryfall.io/art_crop/front/a/9/a992bbe3-c389-4a4a-927b-dfc01a4cd9be.jpg?1783924458"
+       }
+      },
+      {
+       "name": "Insectile Aberration",
+       "artist": "Matt Stewart",
+       "illustration_id": "d910136b-81f1-4772-a257-5dac5b8bed59",
+       "image_uris": {
+        "art_crop": "https://cards.scryfall.io/art_crop/back/a/9/a992bbe3-c389-4a4a-927b-dfc01a4cd9be.jpg?1783924458"
+       }
+      }
+     ]
+    },
+    {
+     "object": "card",
+     "id": "abff6c81-65a4-48fa-ba8f-580f87b0344a",
+     "oracle_id": "edd531b9-f615-4399-8c8c-1c5e18c4acbf",
+     "name": "Delver of Secrets // Insectile Aberration",
+     "layout": "transform",
+     "artist": "Matt Stewart",
+     "image_status": "highres_scan",
+     "card_faces": [
+      {
+       "name": "Delver of Secrets",
+       "artist": "Matt Stewart",
+       "illustration_id": "9b572479-d64a-4d61-bd09-2c9a95138ddb",
+       "image_uris": {
+        "art_crop": "https://cards.scryfall.io/art_crop/front/a/b/abff6c81-65a4-48fa-ba8f-580f87b0344a.jpg?1783925652"
+       }
+      },
+      {
+       "name": "Insectile Aberration",
+       "artist": "Matt Stewart",
+       "illustration_id": "83f0906b-d0e5-4725-ab5b-e33ed3387123",
+       "image_uris": {
+        "art_crop": "https://cards.scryfall.io/art_crop/back/a/b/abff6c81-65a4-48fa-ba8f-580f87b0344a.jpg?1783925652"
+       }
+      }
+     ]
+    },
+    {
+     "object": "card",
+     "id": "59b11ff8-f118-4978-87dd-509dc0c8c932",
+     "oracle_id": "5c446a7f-0301-4343-b0df-146cf2db605b",
+     "name": "Lost Mine of Phandelver",
+     "layout": "normal",
+     "artist": "",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/5/9/59b11ff8-f118-4978-87dd-509dc0c8c932.jpg?1783926340"
+     }
+    },
+    {
+     "object": "card",
+     "id": "53df7b80-71bf-4013-ad44-f76eae8ac81b",
+     "oracle_id": "a1c8b833-8c74-4f95-8a47-1dd41ef99361",
+     "name": "Delver's Torch",
+     "layout": "normal",
+     "artist": "Bram Sels",
+     "illustration_id": "88dafef9-4e38-48ad-968b-eeb22133e323",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/5/3/53df7b80-71bf-4013-ad44-f76eae8ac81b.jpg?1783926535"
+     }
+    },
+    {
+     "object": "card",
+     "id": "28059d09-2c7d-4c61-af55-8942107a7c1f",
+     "oracle_id": "edd531b9-f615-4399-8c8c-1c5e18c4acbf",
+     "name": "Delver of Secrets // Insectile Aberration",
+     "layout": "transform",
+     "artist": "Lius Lasahido",
+     "image_status": "highres_scan",
+     "card_faces": [
+      {
+       "name": "Delver of Secrets",
+       "artist": "Lius Lasahido",
+       "illustration_id": "f057ade6-99c3-4fd6-8818-a00bc0b28696",
+       "image_uris": {
+        "art_crop": "https://cards.scryfall.io/art_crop/front/2/8/28059d09-2c7d-4c61-af55-8942107a7c1f.jpg?1783935481"
+       }
+      },
+      {
+       "name": "Insectile Aberration",
+       "artist": "Lius Lasahido",
+       "illustration_id": "7719db45-6774-4005-85ab-ccc6923a1545",
+       "image_uris": {
+        "art_crop": "https://cards.scryfall.io/art_crop/back/2/8/28059d09-2c7d-4c61-af55-8942107a7c1f.jpg?1783935481"
+       }
+      }
+     ]
+    },
+    {
+     "object": "card",
+     "id": "be0e3547-d8cb-4b68-a396-8c8fbc3b2b1c",
+     "oracle_id": "2f299e69-d82b-48c9-b7f5-cf07cd9dced2",
+     "name": "Jungle Delver",
+     "layout": "normal",
+     "artist": "Kieran Yanner",
+     "illustration_id": "ac4193d7-03df-405c-9965-fdcd82388e35",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/b/e/be0e3547-d8cb-4b68-a396-8c8fbc3b2b1c.jpg?1783935724"
+     }
+    },
+    {
+     "object": "card",
+     "id": "36cb477d-85b1-4cb4-a4b7-c700a3a0e148",
+     "oracle_id": "a13cbac0-4c76-4970-b61e-5f4e020ee95c",
+     "name": "Phyrexian Delver",
+     "layout": "normal",
+     "artist": "Igor Kieryluk",
+     "illustration_id": "6d491efc-479f-4610-bb10-598c4971adfb",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/3/6/36cb477d-85b1-4cb4-a4b7-c700a3a0e148.jpg?1783939674"
+     }
+    },
+    {
+     "object": "card",
+     "id": "11bf83bb-c95b-4b4f-9a56-ce7a1816307a",
+     "oracle_id": "edd531b9-f615-4399-8c8c-1c5e18c4acbf",
+     "name": "Delver of Secrets // Insectile Aberration",
+     "layout": "transform",
+     "artist": "Nils Hamm",
+     "image_status": "highres_scan",
+     "card_faces": [
+      {
+       "name": "Delver of Secrets",
+       "artist": "Nils Hamm",
+       "illustration_id": "1c2fee9b-89ea-4ab1-a751-451c3cd65a88",
+       "image_uris": {
+        "art_crop": "https://cards.scryfall.io/art_crop/front/1/1/11bf83bb-c95b-4b4f-9a56-ce7a1816307a.jpg?1783940984"
+       }
+      },
+      {
+       "name": "Insectile Aberration",
+       "artist": "Nils Hamm",
+       "illustration_id": "c2b5f731-771b-4949-90f3-0ad40d676100",
+       "image_uris": {
+        "art_crop": "https://cards.scryfall.io/art_crop/back/1/1/11bf83bb-c95b-4b4f-9a56-ce7a1816307a.jpg?1783940984"
+       }
+      }
+     ]
+    },
+    {
+     "object": "card",
+     "id": "e66d87a5-7b67-4ec5-b5e2-518d67123118",
+     "oracle_id": "a13cbac0-4c76-4970-b61e-5f4e020ee95c",
+     "name": "Phyrexian Delver",
+     "layout": "normal",
+     "artist": "Dana Knutson",
+     "illustration_id": "1df5df06-a445-41c6-9457-a207aef85521",
+     "image_status": "highres_scan",
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/e/6/e66d87a5-7b67-4ec5-b5e2-518d67123118.jpg?1783945692"
+     }
+    }
+   ]
+  }
+ },
+ "GET /cards/search?q=%28t%3Aelf+is%3Ahighres&unique=art&order=released&page=1": {
+  "status": 400,
+  "body": {
+   "object": "error",
+   "code": "bad_request",
+   "status": 400,
+   "warnings": null,
+   "details": "Your search contains unclosed parentheses."
+  }
+ },
+ "GET /cards/random?q=is%3Ahighres": {
+  "status": 200,
+  "body": {
+   "object": "card",
+   "id": "68d57ab8-fbe0-4f01-b7f7-2a5cccd2d13a",
+   "oracle_id": "5e99ba3b-dc2b-4c3c-84ce-228d4772cfee",
+   "name": "Ryusei, the Falling Star",
+   "layout": "normal",
+   "artist": "Grzegorz Rutkowski",
+   "illustration_id": "a8b6ba10-c027-4d50-8a8b-dc15527a3c24",
+   "image_status": "highres_scan",
+   "image_uris": {
+    "art_crop": "https://cards.scryfall.io/art_crop/front/6/8/68d57ab8-fbe0-4f01-b7f7-2a5cccd2d13a.jpg?1783922416"
+   }
+  }
+ },
+ "NOTE": {
+  "status": 0,
+  "body": "Recorded 2026-11-13 from api.scryfall.com by tests/unit/record-fixtures.test.ts (RECORD=1 ... -t \"art search\"). Trimmed to art fields by trimArt. Seen: unique=art lists one card per illustration; a two-faced card has artist, illustration_id and art_crop on card_faces[], with no top-level illustration_id or image_uris (artist is also top-level); a card with no artist (Lost Mine of Phandelver) exists; an unknown term answers 200 with warnings; no match is 404; an unbalanced parenthesis is 400; -is:placeholder is NOT supported (warning), is:highres is."
+ }
+}

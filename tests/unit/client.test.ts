@@ -311,6 +311,75 @@ describe('sharing a request between callers', () => {
   });
 });
 
+describe('fresh requests', () => {
+  /** A cache that records every read and write. */
+  function spyCache() {
+    const inner = memoryCache();
+    const log = { gets: [] as string[], sets: [] as string[] };
+    return {
+      log,
+      cache: {
+        get: async (k: string) => (log.gets.push(k), inner.get(k)),
+        set: async (k: string, v: { t: number; body: unknown }) => (log.sets.push(k), inner.set(k, v)),
+        prune: inner.prune,
+      },
+    };
+  }
+
+  it('skips the cache read and does not write the reply', async () => {
+    const clock = fakeClock();
+    const f = fakeFetch([json({ n: 1 }), json({ n: 2 })]);
+    const { cache, log } = spyCache();
+    const client = createClient({ fetch: f.fn, cache, now: clock.now, sleep: clock.sleep });
+
+    await expect(client.get('/cards/random', { fresh: true })).resolves.toEqual({ n: 1 });
+    expect(log).toEqual({ gets: [], sets: [] });
+  });
+
+  it('asks the network on every call, even with a reply cached by a normal call', async () => {
+    const clock = fakeClock();
+    const f = fakeFetch([json({ n: 1 }), json({ n: 2 }), json({ n: 3 })]);
+    const client = createClient({ fetch: f.fn, cache: memoryCache(), now: clock.now, sleep: clock.sleep });
+
+    await expect(client.get('/cards/random')).resolves.toEqual({ n: 1 }); // cached
+    await expect(client.get('/cards/random', { fresh: true })).resolves.toEqual({ n: 2 });
+    await expect(client.get('/cards/random', { fresh: true })).resolves.toEqual({ n: 3 });
+    expect(f.calls).toHaveLength(3);
+    // The fresh replies did not replace the cached one.
+    await expect(client.get('/cards/random')).resolves.toEqual({ n: 1 });
+    expect(f.calls).toHaveLength(3);
+  });
+
+  it('does not share one reply between two fresh calls made at once', async () => {
+    const clock = fakeClock();
+    const f = fakeFetch([json({ n: 1 }), json({ n: 2 })]);
+    const client = createClient({ fetch: f.fn, cache: memoryCache(), now: clock.now, sleep: clock.sleep });
+
+    const both = await Promise.all([client.get<{ n: number }>('/cards/random', { fresh: true }), client.get<{ n: number }>('/cards/random', { fresh: true })]);
+    expect(f.calls).toHaveLength(2);
+    expect(both.map((r) => r.n).sort()).toEqual([1, 2]);
+  });
+
+  it('never answers from a saved reply: a failure is thrown', async () => {
+    const clock = fakeClock();
+    const down = () => { throw new TypeError('Failed to fetch'); };
+    const f = fakeFetch([json({ n: 1 }), down]);
+    const client = createClient({ fetch: f.fn, cache: memoryCache(), now: clock.now, sleep: clock.sleep, maxRetries: 0 });
+
+    await client.get('/cards/random'); // saved
+    await expect(client.get('/cards/random', { fresh: true })).rejects.toMatchObject({ status: 0 });
+  });
+
+  it('leaves a normal get unchanged: cached, and shared when made at once', async () => {
+    const clock = fakeClock();
+    const f = fakeFetch([json({ n: 1 }), json({ n: 2 })]);
+    const client = createClient({ fetch: f.fn, cache: memoryCache(), now: clock.now, sleep: clock.sleep });
+
+    await Promise.all([client.get('/x'), client.get('/x'), client.get('/x', {})]);
+    expect(f.calls).toHaveLength(1);
+  });
+});
+
 describe('saved replies when the host cannot be reached', () => {
   const HOUR = 60 * 60 * 1000;
   const down = () => { throw new TypeError('Failed to fetch'); };

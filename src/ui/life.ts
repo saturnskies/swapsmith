@@ -1,3 +1,5 @@
+import { SCRIM_ALPHA, accentSuggestions, parseAccent, type ArtRef } from '../lib/art';
+import { samplePixels } from './accent';
 import { keepAwake, type AwakeDeps, type AwakeState } from '../lib/awake';
 import {
   CMDR_LETHAL,
@@ -8,25 +10,37 @@ import {
   POISON_LETHAL,
   applyChange,
   counter,
+  gameFromDefaults,
+  isDead,
   loadLife,
   newGame,
   parseStartingLife,
   randomSeat,
   resetGame,
   saveLife,
-  seatColor,
   seating,
+  setAccent,
+  setArt,
   setColor,
   setFirst,
   setName,
   setPartners,
   undo,
   warnings,
-  type Setup,
+  type Defaults,
+  type Game,
   type Target,
 } from '../lib/life';
+import { randomArt } from '../scryfall/art';
+import type { ScryfallClient } from '../scryfall/client';
+import { MAX_PROFILES, addProfile, applyProfile, deleteProfile, mergeProfiles as mergeInto, newProfileId, profileFromSeat, renameProfile, type Profile } from '../lib/profiles';
+import { openArtPicker } from './artPicker';
+import { createArtStore, isArtUrl, type ArtStore } from './artStore';
 import { segmented } from './controls';
-import { h } from './dom';
+import { deathOverlay } from './deathArt';
+import { h, icon } from './dom';
+import { buzz } from './native';
+import { openProfilePicker } from './profilePicker';
 
 /** A press this long (ms) counts as a hold: ±10 instead of ±1. */
 const HOLD_MS = 500;
@@ -36,13 +50,35 @@ const UNSAVED = "Your browser is blocking storage, so this game won't be saved i
 const AWAKE_MSG = 'Your screen may turn off during the game.';
 /** The roll highlights a tile every this many ms, around the table twice and on to the winner. */
 const ROLL_STEP_MS = 100;
+/** The "Life totals reset" toast, with its Undo, stays this long (ms). */
+const TOAST_MS = 8000;
+const SAVE_FAILED = "Couldn't save that image. Try again.";
+const RANDOM_FAILED = "Couldn't find art, try again";
+const SESSION_ONLY = "This art won't be kept after you close the app: your browser is blocking storage.";
+/** An id nothing is saved under: asking the art store to delete it says whether storage answers at all. */
+const PROBE = '__probe__';
+const NEED_NAME = 'Give this player a name first';
+const PROFILES_FULL = `You already have ${MAX_PROFILES} saved players. Delete one in the game menu under Profiles first.`;
+const STILL_SAVING = 'Still saving the last art. Try again in a moment.';
+const NO_SAVED = 'No saved players yet. Use Save as profile on a seat in Edit names & colors.';
+const artUnavailable = (name: string) => `Couldn't load the art for ${name}, so only its name and accent were applied.`;
 
 export interface Life {
   hasGame(): boolean;
-  /** Draws the setup or the game for `route`. Drawn once per route: the container stays mounted while another tab shows. */
-  render(view: HTMLElement, route: string): void;
+  /**
+   * Makes sure there is a game to show: the saved one, else a new one from the saved defaults. Safe to call again and again.
+   * Under a save from a newer version a default game plays in memory only: `persist()` skips the write, so the newer save's
+   * bytes stay untouched until a New game replaces it.
+   */
+  ensureGame(): void;
+  /** Draws the game. Drawn once: the container stays mounted while another tab shows. */
+  render(view: HTMLElement): void;
   /** True while the game screen is showing: keeps the screen awake then, and lets go otherwise. */
   setAwake(on: boolean): void;
+  /** The saved profiles, for the backup section. */
+  profiles(): Profile[];
+  /** Adds profiles from a backup (never deletes, keeps the current copy of a shared id, stops at the cap) and saves; says how many were added and skipped. */
+  mergeProfiles(incoming: Profile[]): { added: number; skipped: number };
 }
 
 /** A button that changes a counter: tap = ±1, hold = ±10 once, Shift+Enter = ±10. `delta` is 1 or -1. */
@@ -82,25 +118,220 @@ function holdButton(o: { text: string; aria: string; delta: 1 | -1; cls: string;
 
 const padded = <T,>(items: T[], blank: T): T[] => Array.from({ length: MAX_PLAYERS }, (_, i) => items[i] ?? blank);
 
-/** One row per seat: a name field and the eight color swatches. The setup and the in-game edit dialog both use it. */
-function playerRows(o: { count: number; name(seat: number): string; color(seat: number): number; onName(seat: number, value: string): void; onColor(seat: number, color: number): void }): HTMLElement {
-  return h(
+/** What the player rows need to run a seat's art: its current art and the three things a person can do with it. */
+interface ArtActions {
+  current(seat: number): ArtRef | undefined;
+  choose(seat: number): void;
+  random(seat: number): void;
+  remove(seat: number): void;
+}
+
+/** What the player rows need to run a seat's accent: the current one, the suggestions for its art, and a way to set or clear it. */
+interface AccentActions {
+  current(seat: number): string | undefined;
+  /** The colors to offer for an art id; never rejects, and answers [] when there are none. */
+  suggest(artId: string): Promise<string[]>;
+  /** Sets the accent (a readable `#rrggbb`), or clears it with null. */
+  set(seat: number, hex: string | null): void;
+}
+
+/** What the player rows need to save a seat as a profile or fill it from one. */
+interface ProfileActions {
+  save(seat: number): void;
+  use(seat: number): void;
+}
+
+/** The seat rows' handles: redraw one seat's art line, say something under it, or show a seat's name and accent after a profile was used. */
+interface PlayerRows {
+  el: HTMLElement;
+  refresh(seat: number): void;
+  note(seat: number, text: string): void;
+  profileNote(seat: number, text: string): void;
+  /** The seat's name, accent and art were replaced from outside (a profile): show them in the row. */
+  applied(seat: number): void;
+}
+
+const DICE = ['M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z', 'M8.5 8.5h.01M15.5 8.5h.01M12 12h.01M8.5 15.5h.01M15.5 15.5h.01'];
+
+const ADJUSTED = 'Adjusted so text stays readable';
+const NOT_A_COLOR = 'Enter a color like #b3261e';
+let rowIds = 0;
+
+/**
+ * One row per seat: a name field, the eight palette swatches, the colors suggested from the seat's art, a custom color
+ * field and the art line. The in-game edit dialog uses it. Suggestions are only offered here; a tap applies one.
+ */
+function playerRows(o: {
+  count: number;
+  name(seat: number): string;
+  color(seat: number): number;
+  onName(seat: number, value: string): void;
+  onColor(seat: number, color: number): void;
+  art: ArtActions;
+  accent: AccentActions;
+  profile: ProfileActions;
+}): PlayerRows {
+  interface Line {
+    input: HTMLInputElement;
+    profileNote: HTMLElement;
+    credit: HTMLElement;
+    remove: HTMLElement;
+    note: HTMLElement;
+    palette: HTMLElement[];
+    choices: HTMLElement;
+    custom: HTMLInputElement;
+    accentNote: HTMLElement;
+    /** The art id the offered colors belong to (undefined: none offered). */
+    offered?: string;
+  }
+  const lines = new Map<number, Line>();
+
+  /** Marks which palette swatch or suggestion is the seat's color, and shows an accent in the custom field. */
+  const syncAccent = (seat: number) => {
+    const line = lines.get(seat);
+    if (!line) return;
+    const accent = o.accent.current(seat);
+    line.palette.forEach((b, i) => b.setAttribute('aria-pressed', String(!accent && i === o.color(seat))));
+    for (const b of line.choices.querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.hex === accent));
+    line.custom.value = accent ?? '';
+  };
+  /** Sets the accent and shows what was done: the field shows the (possibly darkened) value, and the note says if it was darkened. */
+  const applyAccent = (seat: number, text: string) => {
+    const line = lines.get(seat)!;
+    const parsed = parseAccent(text);
+    if (!parsed) return false;
+    line.custom.removeAttribute('aria-invalid');
+    line.accentNote.textContent = parsed.adjusted ? ADJUSTED : '';
+    o.accent.set(seat, parsed.hex);
+    syncAccent(seat);
+    return true;
+  };
+  const offer = (seat: number, list: string[]) => {
+    const line = lines.get(seat)!;
+    line.choices.replaceChildren(
+      ...list.map((hex) => {
+        const b = h('button', { type: 'button', class: 'swatch accent-choice', 'aria-label': `Accent: ${hex}`, 'aria-pressed': 'false', style: `--swatch:${hex}` });
+        b.dataset.hex = hex;
+        b.addEventListener('click', () => {
+          line.custom.removeAttribute('aria-invalid');
+          line.accentNote.textContent = '';
+          o.accent.set(seat, hex);
+          syncAccent(seat);
+        });
+        return b;
+      }),
+    );
+    line.choices.hidden = list.length === 0;
+    syncAccent(seat);
+  };
+  const refresh = (seat: number) => {
+    const line = lines.get(seat);
+    const art = o.art.current(seat);
+    if (!line) return;
+    line.credit.textContent = art ? `${art.name} · ${art.artist}` : 'No art';
+    line.remove.hidden = !art;
+    syncAccent(seat);
+    if (line.offered === art?.id) return;
+    // Another art (or none): the old suggestions go now, the new ones come when sampled, unless the seat has changed again.
+    const id = art?.id;
+    line.offered = id;
+    offer(seat, []);
+    if (id) {
+      void o.accent.suggest(id).then((list) => {
+        if (line.offered === id) offer(seat, list);
+      });
+    }
+  };
+  const el = h(
     'div',
     { class: 'player-rows' },
     ...Array.from({ length: o.count }, (_, seat) => {
       const input = h('input', { type: 'text', maxlength: MAX_NAME, autocomplete: 'off', placeholder: `Player ${seat + 1}`, value: o.name(seat), 'aria-label': `Name for player ${seat + 1}` });
       input.addEventListener('input', () => o.onName(seat, input.value));
-      const buttons = PALETTE.map((c, i) => {
-        const b = h('button', { type: 'button', class: 'swatch', 'aria-label': c.name, 'aria-pressed': String(i === o.color(seat)), style: `--swatch:${c.hex}` });
+      const palette = PALETTE.map((c, i) => {
+        const b = h('button', { type: 'button', class: 'swatch', 'aria-label': c.name, 'aria-pressed': 'false', style: `--swatch:${c.hex}` });
         b.addEventListener('click', () => {
+          lines.get(seat)!.custom.removeAttribute('aria-invalid');
+          lines.get(seat)!.accentNote.textContent = '';
           o.onColor(seat, i);
-          buttons.forEach((x, j) => x.setAttribute('aria-pressed', String(j === i)));
+          syncAccent(seat);
         });
         return b;
       });
-      return h('div', { class: 'player-row' }, h('span', { class: 'seat', 'aria-hidden': 'true' }, String(seat + 1)), input, h('div', { class: 'swatches', role: 'group', 'aria-label': `Color for player ${seat + 1}` }, ...buttons));
+      const choose = h('button', { type: 'button', class: 'button small', 'aria-label': `Choose art for player ${seat + 1}` }, 'Art');
+      choose.addEventListener('click', () => o.art.choose(seat));
+      const random = h('button', { type: 'button', class: 'button small', 'aria-label': `Random art for player ${seat + 1}` }, icon(...DICE), 'Random');
+      random.addEventListener('click', () => o.art.random(seat));
+      const remove = h('button', { type: 'button', class: 'button small', 'aria-label': `Remove art for player ${seat + 1}`, hidden: true }, 'Remove art');
+      remove.addEventListener('click', () => o.art.remove(seat));
+      const credit = h('span', { class: 'art-credit small muted' });
+      const note = h('p', { class: 'art-note small muted', role: 'status' });
+      const choices = h('div', { class: 'swatches accent-swatches', role: 'group', 'aria-label': `Suggested accents for player ${seat + 1}`, hidden: true });
+      const accentNote = h('p', { class: 'accent-note small muted', role: 'status', id: `accent-note-${++rowIds}` });
+      const custom = h('input', { type: 'text', class: 'accent-custom', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', maxlength: 12, placeholder: 'Custom #rrggbb', 'aria-label': `Custom accent for player ${seat + 1}`, 'aria-describedby': accentNote.id }) as HTMLInputElement;
+      // A whole #rrggbb applies as it is typed; anything else waits for the field to be left or Enter, so a half-typed color is never an error.
+      custom.addEventListener('input', () => {
+        if (/^#?[0-9a-fA-F]{6}$/.test(custom.value.trim())) applyAccent(seat, custom.value);
+      });
+      custom.addEventListener('change', () => {
+        const text = custom.value.trim();
+        if (text === '') {
+          custom.removeAttribute('aria-invalid');
+          accentNote.textContent = '';
+          syncAccent(seat);
+          return;
+        }
+        // Already applied by the input handler (and possibly darkened): leave its message alone.
+        const typed = parseAccent(text);
+        if (typed && typed.hex === o.accent.current(seat)) return void syncAccent(seat);
+        if (!applyAccent(seat, text)) {
+          custom.setAttribute('aria-invalid', 'true');
+          accentNote.textContent = NOT_A_COLOR;
+        }
+      });
+      const saveProfile = h('button', { type: 'button', class: 'button small', 'aria-label': `Save as profile for player ${seat + 1}` }, 'Save as profile');
+      saveProfile.addEventListener('click', () => o.profile.save(seat));
+      const useProfile = h('button', { type: 'button', class: 'button small', 'aria-label': `Use profile for player ${seat + 1}` }, 'Use profile');
+      useProfile.addEventListener('click', () => o.profile.use(seat));
+      const profileNote = h('p', { class: 'profile-note small muted', role: 'status' });
+      lines.set(seat, { input, profileNote, credit, remove, note, palette, choices, custom, accentNote });
+      return h(
+        'div',
+        { class: 'player-row' },
+        h('span', { class: 'seat', 'aria-hidden': 'true' }, String(seat + 1)),
+        input,
+        h('div', { class: 'swatches', role: 'group', 'aria-label': `Color for player ${seat + 1}` }, ...palette),
+        choices,
+        h('div', { class: 'accent-line' }, custom),
+        accentNote,
+        h('div', { class: 'art-line' }, choose, random, remove, credit),
+        note,
+        h('div', { class: 'art-line' }, saveProfile, useProfile),
+        profileNote,
+      );
     }),
   );
+  for (let seat = 0; seat < o.count; seat += 1) refresh(seat);
+  return {
+    el,
+    refresh,
+    note(seat, text) {
+      const line = lines.get(seat);
+      if (line) line.note.textContent = text;
+    },
+    profileNote(seat, text) {
+      const line = lines.get(seat);
+      if (line) line.profileNote.textContent = text;
+    },
+    applied(seat) {
+      const line = lines.get(seat);
+      if (!line) return;
+      line.input.value = o.name(seat);
+      line.custom.removeAttribute('aria-invalid');
+      line.accentNote.textContent = '';
+      syncAccent(seat);
+    },
+  };
 }
 
 /** A modal question with two buttons; it removes itself when closed. */
@@ -118,26 +349,90 @@ function confirmDialog(host: HTMLElement, o: { id: string; title: string; text: 
   dlg.showModal();
 }
 
-/** The Life Counter: setup screen at `#/life`, the full-screen game at `#/life/game`, saved under its own key after every change. */
-export function createLife(storage: Storage | null): Life {
+let formIds = 0;
+
+/**
+ * The players and starting-life pickers the New game and Defaults sheets share. `value()` is the picked pair, or null while a
+ * custom starting life is not a whole number from 1 to 999; `onChange` hears about every change (and once now), so a sheet can
+ * enable or disable its button.
+ */
+function setupForm(initial: Defaults, onChange: (value: Defaults | null) => void): { el: HTMLElement; value(): Defaults | null } {
+  const hintId = `life-custom-hint-${++formIds}`;
+  let players = initial.players;
+  let preset = initial.startingLife;
+  let custom = !(LIFE_PRESETS as readonly number[]).includes(preset);
+  let text = custom ? String(preset) : '';
+  const field = h('input', { type: 'text', inputmode: 'numeric', autocomplete: 'off', value: text, 'aria-describedby': hintId, 'aria-invalid': 'false' }) as HTMLInputElement;
+  const hint = h('p', { id: hintId, class: 'small muted life-hint', role: 'status' });
+  const label = h('label', { class: 'stack' }, 'Custom starting life', field);
+  const value = (): Defaults | null => {
+    const startingLife = custom ? parseStartingLife(text) : preset;
+    return startingLife == null ? null : { players, startingLife };
+  };
+  const sync = () => {
+    const bad = custom && parseStartingLife(text) == null;
+    label.hidden = !custom;
+    hint.textContent = bad ? 'Enter a whole number from 1 to 999.' : '';
+    field.setAttribute('aria-invalid', String(bad));
+    onChange(value());
+  };
+  field.addEventListener('input', () => {
+    text = field.value;
+    sync();
+  });
+  const lifeOptions = [...LIFE_PRESETS.map((n) => ({ id: String(n), label: String(n) })), { id: 'custom', label: 'Custom' }];
+  const el = h(
+    'div',
+    { class: 'stack' },
+    h('div', { class: 'stack' }, h('strong', {}, 'Players'), segmented('Players', Array.from({ length: MAX_PLAYERS }, (_, i) => ({ id: String(i + 1), label: String(i + 1) })), String(players), (id) => {
+      players = Number(id);
+      sync();
+    })),
+    h(
+      'div',
+      { class: 'stack' },
+      h('strong', {}, 'Starting life'),
+      segmented('Starting life', lifeOptions, custom ? 'custom' : String(preset), (id) => {
+        custom = id === 'custom';
+        if (custom) {
+          text = text || String(preset);
+          field.value = text;
+        } else preset = Number(id);
+        sync();
+      }),
+      label,
+      hint,
+    ),
+  );
+  sync();
+  return { el, value };
+}
+
+/** The Life Counter: the full-screen game at `#/life/game` (its only screen), saved under its own key after every change. */
+export function createLife(storage: Storage | null, client: ScryfallClient, artStore: ArtStore = createArtStore()): Life {
   const loaded = loadLife(storage);
   const store = loaded.store;
   /** A newer version's save sits in storage: leave it alone until a new game starts. */
   let future = loaded.future;
   let saved = loaded.persistent;
-  let drawn: string | null = null;
+  let drawn = false;
   let notices: HTMLElement[] = [];
   /** Counts screen draws: a roll started on an older draw must not write into a newer one. */
   let drawId = 0;
   let awakeState: AwakeState | null = null;
   let stopAwake: (() => void) | null = null;
   let awakeNotes: HTMLElement[] = [];
-
-  // The setup being edited; it lives here so redrawing the screen keeps what was picked.
-  const draft: Setup = { ...store.setup, names: [...store.setup.names] };
-  let custom = !(LIFE_PRESETS as readonly number[]).includes(draft.startingLife);
-  let customText = custom ? String(draft.startingLife) : '';
-  while (draft.colors.length < draft.players) draft.colors.push(-1);
+  /** The art id each seat's tile is showing or loading (the object URL of a saved image is shared by every seat with that id). */
+  const wanted = new Map<number, string>();
+  /** Counts art loads started, across draws: a load for an older one is dropped. */
+  let artSeq = 0;
+  const artRuns = new Map<number, number>();
+  /** Art whose image could not be saved (storage blocked): shown from Scryfall's image host until the app closes. */
+  const sessionOnly = new Set<string>();
+  /** Lets go of an image's object URL unless some seat still shows or is loading it. */
+  const unuse = (id: string) => {
+    if (![...wanted.values()].includes(id)) artStore.release(id);
+  };
 
   const notice = () => {
     const n = h('p', { class: 'banner notice', role: 'status' }, saved ? '' : UNSAVED);
@@ -150,94 +445,101 @@ export function createLife(storage: Storage | null): Life {
     for (const n of notices) n.textContent = saved ? '' : UNSAVED;
   };
 
-  /** Remembers the typed names and colors for the next game. */
-  const remember = () => (store.setup = { ...store.setup, names: padded(draft.names, ''), colors: padded(draft.colors, -1) });
+  /** Remembers a seat's name or color for the next game. */
+  const remember = (seat: number, patch: { name?: string; color?: number; art?: ArtRef | null; accent?: string | null }) => {
+    const names = padded(store.setup.names, '');
+    const colors = padded(store.setup.colors, -1);
+    if (patch.name !== undefined) names[seat] = patch.name.slice(0, MAX_NAME);
+    if (patch.color !== undefined) colors[seat] = patch.color;
+    store.setup = { ...store.setup, names, colors };
+    if (patch.art !== undefined) {
+      const arts = padded<ArtRef | null>(store.setup.arts ?? [], null);
+      arts[seat] = patch.art;
+      store.setup = { ...store.setup, arts };
+    }
+    if (patch.accent !== undefined) {
+      const accents = padded<string | null>(store.setup.accents ?? [], null);
+      accents[seat] = patch.accent;
+      store.setup = { ...store.setup, accents };
+    }
+  };
+  /** Suggested accents by art id, sampled once and kept in memory. A failed or missing sample is not kept, so it is tried again. */
+  const suggestions = new Map<string, Promise<string[]>>();
+  const suggestFor = (id: string): Promise<string[]> => {
+    const known = suggestions.get(id);
+    if (known) return known;
+    const p = (async () => {
+      const blob = await artStore.blob(id);
+      const pixels = blob ? await samplePixels(blob) : null;
+      if (!pixels) throw new Error('no pixels');
+      return accentSuggestions(pixels);
+    })();
+    suggestions.set(id, p);
+    p.catch(() => {
+      if (suggestions.get(id) === p) suggestions.delete(id);
+    });
+    return p.catch(() => []);
+  };
+  /** The image ids that must stay in the cache: the one being saved, every seat's, the remembered setup's and every profile's. */
+  const keepSet = (saving: string): Set<string> => {
+    const keep = new Set<string>([saving]);
+    for (const p of store.game?.players ?? []) if (p.art) keep.add(p.art.id);
+    for (const a of store.setup.arts ?? []) if (a) keep.add(a.id);
+    for (const p of store.profiles ?? []) if (p.art) keep.add(p.art.id);
+    return keep;
+  };
   const awakeNote = () => {
     const n = h('p', { class: 'banner notice', role: 'status' }, awakeState === 'unsupported' || awakeState === 'denied' ? AWAKE_MSG : '');
     awakeNotes.push(n);
     return n;
   };
 
-  function begin() {
-    store.setup = { players: draft.players, startingLife: draft.startingLife, names: padded(draft.names, ''), colors: padded(draft.colors, -1) };
-    store.game = newGame(store.setup);
-    future = false;
-    persist();
-    location.hash = '#/life/game';
-  }
-
-  function drawSetup(view: HTMLElement) {
-    drawId++;
-    notices = [];
-    const redraw = () => drawSetup(view);
-    const startLife = custom ? parseStartingLife(customText) : draft.startingLife;
-    const lifeOptions = [...LIFE_PRESETS.map((n) => ({ id: String(n), label: String(n) })), { id: 'custom', label: 'Custom' }];
-
-    const field = h('input', { type: 'text', inputmode: 'numeric', autocomplete: 'off', value: customText, 'aria-describedby': 'life-custom-hint' }) as HTMLInputElement;
-    const hint = h('p', { id: 'life-custom-hint', class: 'small muted', role: 'status' });
-    const go = h('button', { type: 'button', class: 'button primary' }, store.game ? 'New game' : 'Start game') as HTMLButtonElement;
-    const check = () => {
-      const n = parseStartingLife(customText);
-      hint.textContent = n == null ? 'Enter a whole number from 1 to 999.' : '';
-      go.disabled = n == null;
-      if (n != null) draft.startingLife = n;
-    };
-    field.addEventListener('input', () => {
-      customText = field.value;
-      check();
-    });
-    if (custom) check();
-
-    go.addEventListener('click', () => {
-      if (!store.game) return begin();
-      confirmDialog(view, { id: 'life-confirm-h', title: 'Replace the game in progress?', text: 'Its life totals will be lost.', keep: 'Keep current game', yes: 'Replace it', onYes: begin });
-    });
-
-    view.replaceChildren(
-      h(
-        'section',
-        { class: 'stack', 'aria-labelledby': 'life-h' },
-        h('h2', { id: 'life-h' }, 'Life Counter'),
-        store.game ? h('div', { class: 'actions' }, h('a', { class: 'button primary', href: '#/life/game' }, 'Resume game')) : null,
-        notice(),
-        h('div', { class: 'stack' }, h('strong', {}, 'Players'), segmented('Players', Array.from({ length: MAX_PLAYERS }, (_, i) => ({ id: String(i + 1), label: String(i + 1) })), String(draft.players), (id) => ((draft.players = Number(id)), redraw()))),
-        h(
-          'div',
-          { class: 'stack' },
-          h('strong', {}, 'Starting life'),
-          segmented('Starting life', lifeOptions, custom ? 'custom' : String(draft.startingLife), (id) => {
-            custom = id === 'custom';
-            if (!custom) draft.startingLife = Number(id);
-            else if (startLife != null) customText = customText || String(startLife);
-            redraw();
-          }),
-          custom ? h('label', { class: 'stack' }, 'Custom starting life', field) : null,
-          custom ? hint : null,
-        ),
-        h(
-          'div',
-          { class: 'stack' },
-          h('strong', {}, 'Names and colors'),
-          h('p', { class: 'small muted' }, 'Seats run clockwise from the bottom left of the table. A blank name is "Player 1", "Player 2" and so on.'),
-          playerRows({
-            count: draft.players,
-            name: (i) => draft.names[i] ?? '',
-            color: (i) => seatColor(draft.colors[i], i),
-            onName: (i, v) => (draft.names[i] = v.slice(0, MAX_NAME)),
-            onColor: (i, c) => (draft.colors[i] = c),
-          }),
-        ),
-        h('div', { class: 'actions' }, go),
-      ),
-    );
-  }
-
   function drawGame(view: HTMLElement) {
     const me = ++drawId;
+    // The tiles of the draw before are gone: let go of their pictures; the new tiles ask again.
+    for (const id of new Set(wanted.values())) artStore.release(id);
+    wanted.clear();
     notices = [];
     const seats = store.game!.players.map((_, i) => i);
     awakeNotes = [];
-    const parts = new Map<number, { life: HTMLElement; badges: HTMLElement; warn: HTMLElement; el: HTMLElement; name: HTMLElement; counters: HTMLElement; minus: HTMLElement; plus: HTMLElement }>();
+    const parts = new Map<number, { art: HTMLElement; life: HTMLElement; badges: HTMLElement; warn: HTMLElement; el: HTMLElement; name: HTMLElement; counters: HTMLElement; minus: HTMLElement; plus: HTMLElement }>();
+
+    /**
+     * The reset toast: a copy of the game from before the reset, kept in memory only, and the slot that offers it back. Any
+     * other change to the game, a new game or a redraw drops it. The slot stays in the page, empty, so it is a live region
+     * the moment text lands in it.
+     */
+    let resetSnapshot: Game | null = null;
+    let toastTimer = 0;
+    const toast = h('div', { class: 'toast life-toast', role: 'status' });
+    const clearToast = () => {
+      // The focused Undo is about to leave the page; hand focus to the Menu button (as deckView does for its undo).
+      const lostFocus = toast.contains(document.activeElement);
+      window.clearTimeout(toastTimer);
+      toastTimer = 0;
+      resetSnapshot = null;
+      toast.replaceChildren();
+      if (lostFocus) open.focus();
+    };
+
+    /** The burst's window: data-dying stays on a tile until its skull's animation ends, or this long, whichever is first. */
+    const DYING_MS = 1300;
+    const dyingTimers = new Map<number, number>();
+    const endDying = (seat: number) => {
+      window.clearTimeout(dyingTimers.get(seat));
+      dyingTimers.delete(seat);
+      parts.get(seat)?.el.removeAttribute('data-dying');
+    };
+    /** Starts the burst and the buzz on a tile that has just died (neither with reduced motion, which shows the settled skull at once). */
+    const startDying = (seat: number) => {
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      const el = parts.get(seat)!.el;
+      endDying(seat);
+      el.dataset.dying = 'true';
+      buzz();
+      el.querySelector('.death-skull')?.addEventListener('animationend', () => endDying(seat), { once: true });
+      dyingTimers.set(seat, window.setTimeout(() => endDying(seat), DYING_MS));
+    };
 
     /** Redraws everything a seat's tile shows from the saved game. */
     const updateTile = (seat: number) => {
@@ -249,18 +551,58 @@ export function createLife(storage: Storage | null): Life {
       t.counters.setAttribute('aria-label', `${p.name}: poison and commander damage`);
       t.minus.setAttribute('aria-label', `${p.name}: lose 1 life`);
       t.plus.setAttribute('aria-label', `${p.name}: gain 1 life`);
-      t.el.style.setProperty('--tile', PALETTE[p.color].hex);
+      t.el.style.setProperty('--tile', p.accent ?? PALETTE[p.color].hex);
       t.el.dataset.first = String(g.first === seat);
       const worst = Math.max(0, ...Object.values(p.cmdr));
       t.badges.replaceChildren(...[g.first === seat ? 'Goes first' : null, p.poison > 0 ? `Poison ${p.poison}` : null, worst > 0 ? `Commander ${worst}` : null].filter((x): x is string => !!x).map((x) => h('span', { class: 'badge' }, x)));
       const why = warnings(g, seat);
       t.warn.textContent = why.join(' · ');
       t.el.dataset.warn = String(why.length > 0);
+      // Death is derived from the counters on every redraw. Only a change from alive to dead plays the burst: a tile's first
+      // draw (a load, a reload, a tab switch) has no earlier state, so a dead seat comes back already settled.
+      const wasDead = t.el.dataset.dead;
+      const dead = isDead(g, seat);
+      t.el.dataset.dead = String(dead);
+      if (!dead) endDying(seat);
+      else if (wasDead === 'false') startDying(seat);
+      syncArt(seat);
+    };
+
+    /**
+     * Shows the seat's art on its tile: the saved image, else nothing (the color stays). A load for art the seat no longer
+     * has, or for a draw that is gone, is dropped. Called on every tile redraw; it only acts when the seat's art changed.
+     */
+    const syncArt = (seat: number) => {
+      const want = store.game!.players[seat].art;
+      if (wanted.get(seat) === want?.id) return;
+      const t = parts.get(seat)!;
+      const prev = wanted.get(seat);
+      t.el.removeAttribute('data-art');
+      t.el.style.removeProperty('--art');
+      t.el.style.removeProperty('--scrim');
+      if (want) wanted.set(seat, want.id);
+      else wanted.delete(seat);
+      if (prev) unuse(prev);
+      if (!want) return;
+      const run = ++artSeq;
+      artRuns.set(seat, run);
+      void (async () => {
+        const url = sessionOnly.has(want.id) && isArtUrl(want.url) ? new URL(want.url).href : await artStore.url(want.id);
+        const stale = me !== drawId || artRuns.get(seat) !== run || store.game?.players[seat]?.art?.id !== want.id;
+        if (stale || !url) {
+          if (stale) unuse(want.id);
+          return;
+        }
+        t.el.style.setProperty('--art', `url("${url}")`);
+        t.el.style.setProperty('--scrim', String(SCRIM_ALPHA));
+        t.el.dataset.art = 'true';
+      })();
     };
     const updateAll = () => seats.forEach(updateTile);
 
     /** One change by one player, saved, with that player's tile redrawn. Returns the counter's new value. */
     const adjust = (seat: number, target: Target, delta: number) => {
+      clearToast();
       store.game = applyChange(store.game!, seat, target, delta);
       updateTile(seat);
       persist();
@@ -279,9 +621,12 @@ export function createLife(storage: Storage | null): Life {
       const minus = btn(-1);
       const plus = btn(1);
       const nameEl = h('span', { class: 'tile-name' }, p.name);
+      const artEl = h('div', { class: 'tile-art', 'aria-hidden': 'true' });
       const el = h(
         'div',
-        { class: 'tile', 'data-player': seat, 'data-rotate': flipped ? '180' : '0', 'data-warn': 'false', 'data-first': 'false', style: `--tile:${PALETTE[p.color].hex}` },
+        { class: 'tile', 'data-player': seat, 'data-rotate': flipped ? '180' : '0', 'data-warn': 'false', 'data-first': 'false', style: `--tile:${p.accent ?? PALETTE[p.color].hex}` },
+        artEl,
+        deathOverlay(seat),
         h(
           'div',
           { class: 'tile-inner' },
@@ -290,7 +635,7 @@ export function createLife(storage: Storage | null): Life {
           h('div', { class: 'tile-buttons' }, minus, plus),
         ),
       );
-      parts.set(seat, { life, badges, warn, el, name: nameEl, counters, minus, plus });
+      parts.set(seat, { art: artEl, life, badges, warn, el, name: nameEl, counters, minus, plus });
       return el;
     };
 
@@ -315,6 +660,7 @@ export function createLife(storage: Storage | null): Life {
       const partner = h('input', { type: 'checkbox' }) as HTMLInputElement;
       partner.checked = me.partners;
       partner.addEventListener('change', () => {
+        clearToast();
         store.game = setPartners(store.game!, seat, partner.checked);
         updateAll();
         persist();
@@ -347,66 +693,329 @@ export function createLife(storage: Storage | null): Life {
     const undoBtn = h('button', { type: 'button', class: 'button' }, 'Undo') as HTMLButtonElement;
     const refreshUndo = () => (undoBtn.disabled = store.game!.history.length === 0);
     undoBtn.addEventListener('click', () => {
+      clearToast();
       store.game = undo(store.game!);
       updateAll();
       refreshUndo();
       persist();
     });
     const reset = h('button', { type: 'button', class: 'button danger' }, 'Reset life totals');
-    reset.addEventListener('click', () =>
-      confirmDialog(view, {
-        id: 'reset-h',
-        title: 'Reset all life totals?',
-        text: 'Life goes back to the starting total, poison and commander damage clear, and Undo is emptied.',
-        keep: 'Keep playing',
-        yes: 'Reset',
-        onYes: () => {
-          store.game = resetGame(store.game!);
-          updateAll();
-          refreshUndo();
-          persist();
-        },
-      }),
-    );
+    reset.addEventListener('click', () => {
+      clearToast();
+      resetSnapshot = structuredClone(store.game!);
+      store.game = resetGame(store.game!);
+      updateAll();
+      refreshUndo();
+      persist();
+      menu.close();
+      const undoReset = h('button', { type: 'button', class: 'button' }, 'Undo');
+      undoReset.addEventListener('click', () => {
+        const snapshot = resetSnapshot;
+        if (!snapshot) return;
+        clearToast();
+        store.game = snapshot;
+        updateAll();
+        refreshUndo();
+        persist();
+      });
+      toast.replaceChildren(h('span', {}, 'Life totals reset'), undoReset);
+      toastTimer = window.setTimeout(() => {
+        if (me === drawId) clearToast();
+      }, TOAST_MS);
+    });
+    /** The edit dialog's rows while it is open, so art changes can redraw a seat's line. */
+    let rows: PlayerRows | null = null;
+    /** One art change at a time (a picked image or a random one, on any seat): a second press while one runs does nothing. */
+    let artBusy = false;
+    const exclusive = async <T,>(fn: () => Promise<T>): Promise<T | undefined> => {
+      if (artBusy) return undefined;
+      artBusy = true;
+      try {
+        return await fn();
+      } finally {
+        artBusy = false;
+      }
+    };
+
+    /**
+     * Saves the image, then gives the seat the art, so a failed save never leaves a seat pointing at nothing. Answers a
+     * message when nothing was applied, else null. When the game was replaced while the image was saving, the pick is
+     * dropped. With storage blocked the art still applies, from Scryfall's image host, with a note that it won't be kept.
+     */
+    const commitArt = async (seat: number, ref: ArtRef): Promise<string | null> => {
+      rows?.note(seat, '');
+      const saved = await artStore.save(ref, keepSet(ref.id));
+      if (me !== drawId || !store.game?.players[seat]) return null;
+      let session = false;
+      if (saved === null) {
+        // Not saved: either the image was unusable, or storage is blocked (it does not even answer a delete).
+        const storageWorks = await artStore.remove(PROBE);
+        if (me !== drawId || !store.game?.players[seat]) return null;
+        if (storageWorks || !isArtUrl(ref.url)) return SAVE_FAILED;
+        sessionOnly.add(ref.id);
+        session = true;
+      } else sessionOnly.delete(ref.id);
+      clearToast();
+      store.game = setArt(store.game, seat, ref);
+      remember(seat, { art: ref });
+      persist();
+      // Asked for again even when the seat had this very art (its saved image may have been missing).
+      const prev = wanted.get(seat);
+      wanted.delete(seat);
+      updateTile(seat);
+      if (prev && prev !== ref.id) unuse(prev);
+      rows?.refresh(seat);
+      if (session) rows?.note(seat, SESSION_ONLY);
+      return null;
+    };
+    const chooseArt = (seat: number, ref: ArtRef) => exclusive(() => commitArt(seat, ref)).then((message) => (message === undefined ? 'Still saving the last art. Try again in a moment.' : message));
+    const randomFor = async (seat: number) => {
+      const message = await exclusive(async () => {
+        rows?.note(seat, 'Finding art…');
+        let ref: ArtRef;
+        try {
+          ref = await randomArt(client);
+        } catch {
+          return RANDOM_FAILED;
+        }
+        if (me !== drawId) return null;
+        return commitArt(seat, ref);
+      });
+      if (message && me === drawId) rows?.note(seat, message);
+    };
+    // Behind the same guard as a pick or a random: removing while one is still landing would let it put the art back.
+    const removeArt = (seat: number) =>
+      void exclusive(async () => {
+        clearToast();
+        store.game = setArt(store.game!, seat, null);
+        remember(seat, { art: null });
+        persist();
+        updateTile(seat);
+        rows?.refresh(seat);
+        rows?.note(seat, '');
+      });
+
+    /** Saves a seat's name, art and accent as a new profile, or says why not. */
+    const saveProfile = (seat: number) => {
+      const list = store.profiles ?? [];
+      let p = profileFromSeat(store.game!.players[seat], newProfileId());
+      if (!p) return rows?.profileNote(seat, NEED_NAME);
+      while (list.some((q) => q.id === p!.id)) p = { ...p, id: newProfileId() };
+      const next = addProfile(list, p);
+      if (!next) return rows?.profileNote(seat, PROFILES_FULL);
+      store.profiles = next;
+      persist();
+      rows?.profileNote(seat, `Saved ${p.name} as a profile.`);
+    };
+    /**
+     * Copies a profile onto a seat, behind the same one-art-change guard as a pick. Its image is fetched again when the cache
+     * lost it; when that fails the seat still gets the name and accent (and the tile its accent colour) with a notice.
+     */
+    const useProfile = async (seat: number, profile: Profile) => {
+      const message = await exclusive(async () => {
+        rows?.profileNote(seat, '');
+        rows?.note(seat, '');
+        let art = profile.art;
+        let problem = '';
+        let session = false;
+        if (art) {
+          const saved = await artStore.save(art, keepSet(art.id));
+          if (me !== drawId || !store.game?.players[seat]) return null;
+          if (saved === null) {
+            const storageWorks = await artStore.remove(PROBE);
+            if (me !== drawId || !store.game?.players[seat]) return null;
+            if (!storageWorks && isArtUrl(art.url)) {
+              sessionOnly.add(art.id);
+              session = true;
+            } else {
+              art = undefined;
+              problem = artUnavailable(profile.name);
+            }
+          } else sessionOnly.delete(art.id);
+        }
+        clearToast();
+        const prev = wanted.get(seat);
+        store.game = applyProfile(store.game!, seat, art ? profile : { id: profile.id, name: profile.name, ...(profile.accent ? { accent: profile.accent } : {}) });
+        remember(seat, { name: profile.name, art: art ?? null, accent: profile.accent ?? null });
+        persist();
+        // Asked for again even when the seat had this very art (its saved image may have been missing).
+        if (art) wanted.delete(seat);
+        updateTile(seat);
+        if (art && prev && prev !== art.id) unuse(prev);
+        rows?.refresh(seat);
+        rows?.applied(seat);
+        rows?.profileNote(seat, problem);
+        if (session) rows?.note(seat, SESSION_ONLY);
+        return null;
+      });
+      if (message === undefined && me === drawId) rows?.profileNote(seat, STILL_SAVING);
+    };
+
     const edit = h('button', { type: 'button', class: 'button' }, 'Edit names & colors');
     edit.addEventListener('click', () => {
       const closeEdit = h('button', { type: 'button', class: 'button' }, 'Close');
-      const dlg = h(
-        'dialog',
-        { class: 'picker sheet', 'aria-labelledby': 'edit-h' },
-        h('h2', { id: 'edit-h' }, 'Edit players'),
-        playerRows({
-          count: seats.length,
-          name: (i) => store.game!.players[i].name,
-          color: (i) => store.game!.players[i].color,
-          onName: (i, v) => {
-            store.game = setName(store.game!, i, v);
-            draft.names[i] = v.slice(0, MAX_NAME);
-            remember();
+      rows = playerRows({
+        count: seats.length,
+        name: (i) => store.game!.players[i].name,
+        color: (i) => store.game!.players[i].color,
+        onName: (i, v) => {
+          clearToast();
+          store.game = setName(store.game!, i, v);
+          remember(i, { name: v });
+          updateAll();
+          persist();
+        },
+        onColor: (i, c) => {
+          // A palette color replaces any accent: the accent is what the seat showed instead of the palette.
+          clearToast();
+          store.game = setAccent(setColor(store.game!, i, c), i, null);
+          remember(i, { color: c, accent: null });
+          updateAll();
+          persist();
+        },
+        accent: {
+          current: (i) => store.game!.players[i].accent,
+          suggest: suggestFor,
+          set: (i, hex) => {
+            clearToast();
+            store.game = setAccent(store.game!, i, hex);
+            remember(i, { accent: hex });
             updateAll();
             persist();
           },
-          onColor: (i, c) => {
-            store.game = setColor(store.game!, i, c);
-            draft.colors[i] = c;
-            remember();
-            updateAll();
-            persist();
-          },
-        }),
-        h('div', { class: 'actions' }, closeEdit),
-      );
+        },
+        art: {
+          current: (i) => store.game!.players[i].art,
+          choose: (i) => openArtPicker({ host: view, client, label: store.game!.players[i].name, onPick: (ref) => chooseArt(i, ref) }),
+          random: (i) => void randomFor(i),
+          remove: removeArt,
+        },
+        profile: {
+          save: saveProfile,
+          use: (i) => openProfilePicker({ host: view, profiles: store.profiles ?? [], label: store.game!.players[i].name, onPick: (p) => void useProfile(i, p) }),
+        },
+      });
+      const mine = rows;
+      const dlg = h('dialog', { class: 'picker sheet', 'aria-labelledby': 'edit-h' }, h('h2', { id: 'edit-h' }, 'Edit players'), mine.el, h('div', { class: 'actions' }, closeEdit));
       closeEdit.addEventListener('click', () => dlg.close());
-      dlg.addEventListener('close', () => dlg.remove());
+      dlg.addEventListener('close', () => {
+        if (rows === mine) rows = null;
+        dlg.remove();
+      });
       view.append(dlg);
       dlg.showModal();
     });
+    /** Game menu → Profiles: the saved players with Rename and Delete. A delete is at once, with an undo for 8 seconds. */
+    const profilesDialog = () => {
+      let renaming: string | null = null;
+      let undoing: { profile: Profile; index: number } | null = null;
+      let timer = 0;
+      const list = h('ul', { class: 'profile-list' });
+      const empty = h('p', { class: 'muted' }, NO_SAVED);
+      const toastEl = h('div', { class: 'toast profile-toast', role: 'status' });
+      const closeBtn = h('button', { type: 'button', class: 'button' }, 'Close');
+      const dlg = h('dialog', { class: 'picker sheet profiles', 'aria-labelledby': 'profiles-h' }, h('h2', { id: 'profiles-h' }, 'Profiles'), list, empty, toastEl, h('div', { class: 'actions' }, closeBtn));
+      const dropToast = () => {
+        const lostFocus = toastEl.contains(document.activeElement);
+        window.clearTimeout(timer);
+        timer = 0;
+        undoing = null;
+        toastEl.replaceChildren();
+        if (lostFocus) closeBtn.focus();
+      };
+      const draw = (focus?: HTMLElement | null) => {
+        const profiles = store.profiles ?? [];
+        empty.hidden = profiles.length > 0;
+        let target: HTMLElement | null = null;
+        list.replaceChildren(
+          ...profiles.map((p) => {
+            const chip = h('span', { class: 'swatch-chip', 'aria-hidden': 'true', style: p.accent ? `--chip:${p.accent}` : '' });
+            if (p.id === renaming) {
+              const field = h('input', { type: 'text', maxlength: MAX_NAME, autocomplete: 'off', value: p.name, 'aria-label': `New name for ${p.name}`, 'aria-invalid': 'false' }) as HTMLInputElement;
+              const error = h('p', { class: 'field-error profile-error', role: 'alert' });
+              const save = h('button', { type: 'submit', class: 'button primary', 'aria-label': `Save name for ${p.name}` }, 'Save');
+              const cancel = h('button', { type: 'button', class: 'button', 'aria-label': `Cancel renaming ${p.name}` }, 'Cancel');
+              field.setAttribute('aria-describedby', (error.id = `profile-error-${p.id}`));
+              field.addEventListener('input', () => {
+                field.setAttribute('aria-invalid', 'false');
+                error.textContent = '';
+              });
+              const form = h('form', { class: 'profile-rename' }, chip, field, save, cancel, error);
+              form.addEventListener('submit', (e) => {
+                e.preventDefault();
+                if (field.value.trim() === '') {
+                  field.setAttribute('aria-invalid', 'true');
+                  error.textContent = 'Enter a name';
+                  return;
+                }
+                store.profiles = renameProfile(store.profiles ?? [], p.id, field.value);
+                persist();
+                renaming = null;
+                draw();
+                list.querySelector<HTMLElement>(`[data-rename="${CSS.escape(p.id)}"]`)?.focus();
+              });
+              cancel.addEventListener('click', () => {
+                renaming = null;
+                draw();
+                list.querySelector<HTMLElement>(`[data-rename="${CSS.escape(p.id)}"]`)?.focus();
+              });
+              target = field;
+              return h('li', { class: 'profile-row renaming' }, form);
+            }
+            const rename = h('button', { type: 'button', class: 'button small', 'aria-label': `Rename ${p.name}` }, 'Rename');
+            rename.dataset.rename = p.id;
+            rename.addEventListener('click', () => {
+              renaming = p.id;
+              draw();
+            });
+            const del = h('button', { type: 'button', class: 'button small danger', 'aria-label': `Delete ${p.name}` }, 'Delete');
+            del.addEventListener('click', () => {
+              const current = store.profiles ?? [];
+              const index = current.findIndex((q) => q.id === p.id);
+              if (index < 0) return;
+              store.profiles = deleteProfile(current, p.id);
+              persist();
+              dropToast();
+              undoing = { profile: p, index };
+              const undo = h('button', { type: 'button', class: 'button' }, 'Undo');
+              undo.addEventListener('click', () => {
+                const back = undoing;
+                if (!back) return;
+                dropToast();
+                const now = store.profiles ?? [];
+                if (now.length < MAX_PROFILES && !now.some((q) => q.id === back.profile.id)) {
+                  store.profiles = [...now.slice(0, back.index), back.profile, ...now.slice(back.index)];
+                  persist();
+                }
+                draw();
+                list.querySelector<HTMLElement>(`[data-rename="${CSS.escape(back.profile.id)}"]`)?.focus();
+              });
+              toastEl.replaceChildren(h('span', {}, `Deleted ${p.name}`), undo);
+              timer = window.setTimeout(dropToast, TOAST_MS);
+              draw(undo);
+            });
+            return h('li', { class: 'profile-row' }, chip, h('span', { class: 'profile-name' }, p.name), rename, del);
+          }),
+        );
+        (target ?? focus)?.focus();
+      };
+      closeBtn.addEventListener('click', () => dlg.close());
+      dlg.addEventListener('close', () => {
+        window.clearTimeout(timer);
+        dlg.remove();
+      });
+      draw();
+      view.append(dlg);
+      dlg.showModal();
+    };
+
     /** One roll at a time: the menu closes, the table lights up seat by seat, and the winner is marked and saved. */
     let rolling = false;
     const rollBtn = h('button', { type: 'button', class: 'button' }, 'Roll for first player');
     rollBtn.addEventListener('click', () => {
       if (rolling) return;
       rolling = true;
+      clearToast();
       open.disabled = true;
       menu.close();
       const seat = randomSeat(seats.length);
@@ -429,6 +1038,91 @@ export function createLife(storage: Storage | null): Life {
       };
       tick(0);
     });
+    /** One New game or Defaults sheet at a time: a second tap while one is showing does nothing. */
+    let sheetOpen = false;
+    const openSetupSheet = (build: () => HTMLDialogElement) => {
+      if (sheetOpen) return;
+      sheetOpen = true;
+      menu.close();
+      const dlg = build();
+      dlg.addEventListener('close', () => {
+        sheetOpen = false;
+        dlg.remove();
+      });
+      view.append(dlg);
+      dlg.showModal();
+    };
+
+    /** Players and starting life for a fresh game, from the saved defaults. Starting asks first: a game always exists. */
+    const newGameDialog = () => {
+      const start = h('button', { type: 'submit', class: 'button primary' }, 'Start') as HTMLButtonElement;
+      const close = h('button', { type: 'button', class: 'button' }, 'Close');
+      const form = setupForm(store.defaults, (v) => (start.disabled = v == null));
+      const el = h('form', { class: 'stack' }, h('h2', { id: 'newgame-h' }, 'New game'), notice(), form.el, h('div', { class: 'actions' }, start, close));
+      const dlg = h('dialog', { class: 'picker sheet', 'aria-labelledby': 'newgame-h' }, el);
+      close.addEventListener('click', () => dlg.close());
+      el.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const picked = form.value();
+        if (!picked) return;
+        confirmDialog(view, {
+          id: 'life-confirm-h',
+          title: 'Replace the game in progress?',
+          text: 'Its life totals will be lost.',
+          keep: 'Keep current game',
+          yes: 'Replace it',
+          onYes: () => {
+            store.setup = { ...store.setup, players: picked.players, startingLife: picked.startingLife };
+            store.game = newGame(store.setup);
+            future = false;
+            persist();
+            drawGame(view);
+            // The sheet and the menu it came from are gone with the old draw; keep focus on the new game's menu button.
+            view.querySelector<HTMLElement>('.table-menu')?.focus();
+          },
+        });
+      });
+      return dlg;
+    };
+
+    /** The pair the Life Counter opens into when there is no saved game, and the form's start for every New game. */
+    const defaultsDialog = () => {
+      const save = h('button', { type: 'submit', class: 'button primary' }, 'Save defaults') as HTMLButtonElement;
+      const useGame = h('button', { type: 'button', class: 'button' }, "Use this game's setup");
+      const close = h('button', { type: 'button', class: 'button' }, 'Close');
+      const savedNote = h('p', { class: 'small muted saved-note', role: 'status' });
+      const holder = h('div', { class: 'stack' });
+      let form = { value: (): Defaults | null => null };
+      const mount = (d: Defaults) => {
+        const f = setupForm(d, (v) => {
+          save.disabled = v == null;
+          savedNote.textContent = '';
+        });
+        form = f;
+        holder.replaceChildren(f.el);
+      };
+      mount(store.defaults);
+      const el = h('form', { class: 'stack' }, h('h2', { id: 'defaults-h' }, 'Defaults'), h('p', { class: 'small muted' }, 'The players and starting life a new game starts with.'), notice(), holder, h('div', { class: 'actions' }, useGame, save, close), savedNote);
+      const dlg = h('dialog', { class: 'picker sheet', 'aria-labelledby': 'defaults-h' }, el);
+      close.addEventListener('click', () => dlg.close());
+      useGame.addEventListener('click', () => mount({ players: store.game!.players.length, startingLife: store.game!.startingLife }));
+      el.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const picked = form.value();
+        if (!picked) return;
+        store.defaults = picked;
+        persist();
+        savedNote.textContent = saved && !future ? 'Saved' : 'Used for now, but not stored.';
+      });
+      return dlg;
+    };
+
+    const newBtn = h('button', { type: 'button', class: 'button' }, 'New game');
+    newBtn.addEventListener('click', () => openSetupSheet(newGameDialog));
+    const defaultsBtn = h('button', { type: 'button', class: 'button' }, 'Defaults');
+    defaultsBtn.addEventListener('click', () => openSetupSheet(defaultsDialog));
+    const profilesBtn = h('button', { type: 'button', class: 'button' }, 'Profiles');
+    profilesBtn.addEventListener('click', profilesDialog);
     const close = h('button', { type: 'button', class: 'button' }, 'Close');
     const menu = h(
       'dialog',
@@ -436,7 +1130,7 @@ export function createLife(storage: Storage | null): Life {
       h('h2', { id: 'game-menu-h' }, 'Game menu'),
       notice(),
       awakeNote(),
-      h('div', { class: 'actions' }, undoBtn, rollBtn, edit, reset, h('a', { class: 'button', href: '#/life' }, 'Leave game'), close),
+      h('div', { class: 'menu-actions' }, undoBtn, rollBtn, newBtn, defaultsBtn, edit, profilesBtn, reset, h('a', { class: 'button', href: '#/' }, 'Leave game'), close),
     );
     close.addEventListener('click', () => menu.close());
     const open = h('button', { type: 'button', class: `table-menu${top.length ? '' : ' corner'}`, 'aria-label': 'Game menu' }, 'Menu');
@@ -446,7 +1140,7 @@ export function createLife(storage: Storage | null): Life {
     });
 
     view.replaceChildren(
-      h('section', { class: 'table', 'aria-label': 'Life totals' }, top.length ? h('div', { class: 'table-row top' }, ...top.map((s) => tile(s, true))) : null, h('div', { class: 'table-row bottom' }, ...bottom.map((s) => tile(s, false))), open, menu),
+      h('section', { class: 'table', 'aria-label': 'Life totals' }, top.length ? h('div', { class: 'table-row top' }, ...top.map((s) => tile(s, true))) : null, h('div', { class: 'table-row bottom' }, ...bottom.map((s) => tile(s, false))), open, toast, menu),
     );
     updateAll();
   }
@@ -466,11 +1160,25 @@ export function createLife(storage: Storage | null): Life {
         stopAwake = null;
       }
     },
-    render(view, route) {
-      if (route === drawn) return;
-      drawn = route;
-      if (route === '#/life/game' && store.game) drawGame(view);
-      else drawSetup(view);
+    profiles: () => [...(store.profiles ?? [])],
+    mergeProfiles(incoming) {
+      const merged = mergeInto(store.profiles ?? [], incoming);
+      if (merged.added > 0) {
+        store.profiles = merged.profiles;
+        persist();
+      }
+      return { added: merged.added, skipped: merged.skipped };
+    },
+    ensureGame() {
+      if (!store.game) {
+        store.game = gameFromDefaults(store);
+        persist();
+      }
+    },
+    render(view) {
+      if (drawn) return;
+      drawn = true;
+      drawGame(view);
     },
   };
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   CMDR_LETHAL,
+  DEFAULT_PLAYERS,
   HISTORY_LIMIT,
   LIFE_KEY,
   PALETTE,
@@ -10,6 +11,8 @@ import {
   contrastWithWhite,
   defaultSetup,
   emptyLife,
+  gameFromDefaults,
+  isDead,
   loadLife,
   newGame,
   parseStartingLife,
@@ -21,11 +24,14 @@ import {
   setColor,
   setFirst,
   setName,
+  setAccent,
+  setArt,
   setPartners,
   undo,
   warnings,
   type Game,
 } from '../../src/lib/life';
+import type { ArtRef } from '../../src/lib/art';
 
 /** A Storage stand-in that can be told to fail. */
 function fakeStorage(initial: Record<string, string> = {}, opts: { failGet?: boolean; failSet?: boolean } = {}): Storage & { data: Record<string, string> } {
@@ -81,7 +87,7 @@ describe('newGame', () => {
 
 describe('changeLife', () => {
   it('changes only the chosen player and leaves the old game untouched', () => {
-    const g = newGame(defaultSetup());
+    const g = newGame({ ...defaultSetup(), players: 4 });
     const next = changeLife(g, 2, -10);
     expect(next.players.map((p) => p.life)).toEqual([40, 40, 30, 40]);
     expect(g.players[2].life).toBe(40);
@@ -115,6 +121,40 @@ describe('parseStartingLife', () => {
 });
 
 describe('loadLife and saveLife', () => {
+  describe('profiles', () => {
+    const profile = (id: string, extra: Record<string, unknown> = {}) => ({ id, name: `N${id}`, ...extra });
+    const loadRaw = (raw: unknown) => loadLife(fakeStorage({ [LIFE_KEY]: JSON.stringify(raw) })).store;
+
+    it('a store saved without profiles loads with none', () => {
+      const s = loadRaw({ version: 1, game: null, setup: {}, defaults: {} });
+      expect(s.profiles ?? []).toEqual([]);
+      expect(loadLife(fakeStorage()).store.profiles ?? []).toEqual([]);
+    });
+
+    it('junk loads clean: bad entries dropped, duplicates removed, capped at 12', () => {
+      expect(loadRaw({ version: 1, profiles: 'x' }).profiles ?? []).toEqual([]);
+      expect(loadRaw({ version: 1, profiles: { id: 'a', name: 'b' } }).profiles ?? []).toEqual([]);
+      const junk = [7, null, { id: 'a' }, profile('b', { accent: 'red', art: { id: 'x' } }), profile('b'), ...Array.from({ length: 500 }, (_, i) => profile(`p${i}`))];
+      const out = loadRaw({ version: 1, profiles: junk }).profiles!;
+      expect(out).toHaveLength(12);
+      expect(out[0]).toEqual({ id: 'b', name: 'Nb' });
+    });
+
+    it('round-trips through saveLife', () => {
+      const s = fakeStorage();
+      const store = emptyLife();
+      store.profiles = [{ id: 'p1', name: 'Ann', accent: '#123456', art: { id: 'i', cardId: 'c', name: 'Edgar', artist: 'Eric', url: 'https://cards.scryfall.io/a.jpg' } }, { id: 'p2', name: 'Bo' }];
+      expect(saveLife(s, store)).toBe(true);
+      expect(loadLife(s).store.profiles).toEqual(store.profiles);
+    });
+
+    it('a future-version store still leaves the saved data alone and loads no profiles', () => {
+      const r = loadLife(fakeStorage({ [LIFE_KEY]: JSON.stringify({ version: 2, profiles: [profile('a')] }) }));
+      expect(r.future).toBe(true);
+      expect(r.store.profiles ?? []).toEqual([]);
+    });
+  });
+
   it('starts empty when nothing is saved', () => {
     const r = loadLife(fakeStorage());
     expect(r).toMatchObject({ persistent: true, future: false });
@@ -178,7 +218,7 @@ describe('loadLife and saveLife', () => {
   it('repairs a bad setup to defaults', () => {
     const raw = { version: 1, game: null, setup: { players: 9, startingLife: 'lots', names: [1, 'ok'] } };
     const { setup } = loadLife(fakeStorage({ [LIFE_KEY]: JSON.stringify(raw) })).store;
-    expect(setup.players).toBe(4);
+    expect(setup.players).toBe(2);
     expect(setup.startingLife).toBe(40);
     expect(setup.names).toEqual(['', 'ok']);
     expect(setup.colors).toEqual([]);
@@ -191,6 +231,94 @@ describe('loadLife and saveLife', () => {
     expect(r.future).toBe(true);
     expect(r.store.game).toBeNull();
     expect(s.data[LIFE_KEY]).toBe(raw);
+  });
+});
+
+describe('defaults', () => {
+  const pair = { players: 2, startingLife: 40 };
+  const loadWith = (defaults: unknown) => loadLife(fakeStorage({ [LIFE_KEY]: JSON.stringify({ version: 1, game: null, setup: {}, defaults }) })).store;
+
+  it('start at 2 players and 40 life', () => {
+    expect(DEFAULT_PLAYERS).toBe(2);
+    expect(defaultSetup()).toMatchObject({ players: 2, startingLife: 40 });
+    expect(emptyLife().setup).toMatchObject({ players: 2, startingLife: 40 });
+    expect(emptyLife().defaults).toEqual(pair);
+    expect(emptyLife().version).toBe(1);
+  });
+
+  it('load as the default pair from a store saved before defaults existed', () => {
+    const raw = { version: 1, game: null, setup: { players: 3, startingLife: 30, names: [], colors: [] } };
+    expect(loadLife(fakeStorage({ [LIFE_KEY]: JSON.stringify(raw) })).store.defaults).toEqual(pair);
+  });
+
+  it('load as saved', () => {
+    expect(loadWith({ players: 4, startingLife: 30 }).defaults).toEqual({ players: 4, startingLife: 30 });
+  });
+
+  it('round-trip through saveLife', () => {
+    const s = fakeStorage();
+    const store = emptyLife();
+    store.defaults = { players: 5, startingLife: 25 };
+    saveLife(s, store);
+    expect(loadLife(s).store.defaults).toEqual({ players: 5, startingLife: 25 });
+  });
+
+  it.each([
+    ['players 0', { players: 0, startingLife: 30 }, { players: 2, startingLife: 30 }],
+    ['players 7', { players: 7, startingLife: 30 }, { players: 2, startingLife: 30 }],
+    ['players a string', { players: '4', startingLife: 30 }, { players: 2, startingLife: 30 }],
+    ['players null', { players: null, startingLife: 30 }, { players: 2, startingLife: 30 }],
+    ['players 2.6 (rounds to 3)', { players: 2.6, startingLife: 30 }, { players: 3, startingLife: 30 }],
+    ['life 0 (clamps to 1)', { players: 4, startingLife: 0 }, { players: 4, startingLife: 1 }],
+    ['life 1000 (clamps to 999)', { players: 4, startingLife: 1000 }, { players: 4, startingLife: 999 }],
+    ['life NaN', { players: 4, startingLife: NaN }, { players: 4, startingLife: 40 }],
+    ['life a string', { players: 4, startingLife: 'lots' }, { players: 4, startingLife: 40 }],
+    ['an empty object', {}, pair],
+    ['null', null, pair],
+    ['an array', [4, 30], pair],
+    ['a number', 4, pair],
+  ])('with %s load as a repaired pair, never throwing', (_label, raw, expected) => {
+    expect(loadWith(raw).defaults).toEqual(expected);
+  });
+
+  it('are left as the default pair, with the saved copy untouched, for a store from a newer version', () => {
+    const raw = JSON.stringify({ version: 2, game: { whatever: true }, defaults: { players: 4, startingLife: 30 } });
+    const s = fakeStorage({ [LIFE_KEY]: raw });
+    const r = loadLife(s);
+    expect(r.future).toBe(true);
+    expect(r.store.game).toBeNull();
+    expect(r.store.defaults).toEqual(pair);
+    expect(s.data[LIFE_KEY]).toBe(raw);
+  });
+});
+
+describe('gameFromDefaults', () => {
+  it('takes players and life from defaults, names and colors from setup by seat', () => {
+    const store = emptyLife();
+    store.defaults = { players: 3, startingLife: 30 };
+    store.setup = { players: 6, startingLife: 20, names: ['Ann', '', 'Cy'], colors: [5, -1, 2] };
+    const g = gameFromDefaults(store);
+    expect(g.startingLife).toBe(30);
+    expect(g.players.map((p) => p.life)).toEqual([30, 30, 30]);
+    expect(g.players.map((p) => p.name)).toEqual(['Ann', 'Player 2', 'Cy']);
+    expect(g.players.map((p) => p.color)).toEqual([5, 1, 2]);
+  });
+
+  it('falls back to "Player N" and the seat color past the saved list', () => {
+    const store = emptyLife();
+    store.defaults = { players: 4, startingLife: 40 };
+    store.setup = { players: 2, startingLife: 40, names: ['Ann'], colors: [6] };
+    const g = gameFromDefaults(store);
+    expect(g.players.map((p) => p.name)).toEqual(['Ann', 'Player 2', 'Player 3', 'Player 4']);
+    expect(g.players.map((p) => p.color)).toEqual([6, 1, 2, 3]);
+  });
+
+  it('gives the plain default game (2 players, 40 life) from an empty store', () => {
+    const g = gameFromDefaults(emptyLife());
+    expect(g.players).toHaveLength(2);
+    expect(g.players.map((p) => p.life)).toEqual([40, 40]);
+    expect(g.history).toEqual([]);
+    expect(g.first).toBeNull();
   });
 });
 
@@ -300,6 +428,46 @@ describe('warnings (nothing is ever eliminated)', () => {
     let g = applyChange(three(), 0, { kind: 'poison' }, 10);
     g = applyChange(g, 0, { kind: 'poison' }, 1);
     expect(g.players[0].poison).toBe(11);
+  });
+});
+
+describe('isDead (the same three lethal sources warnings lists)', () => {
+  const partnered = () => setPartners(three(), 1, true);
+  const life = (n: number) => applyChange(three(), 0, { kind: 'life' }, n - 40);
+  it.each([
+    ['life 0', () => life(0), true, ['Life 0 or below']],
+    ['life -5', () => life(-5), true, ['Life 0 or below']],
+    ['life 1', () => life(1), false, []],
+    ['poison 10', () => applyChange(three(), 0, { kind: 'poison' }, 10), true, ['Poison 10']],
+    ['poison 9', () => applyChange(three(), 0, { kind: 'poison' }, 9), false, []],
+    ['commander 21 from slot 0', () => applyChange(three(), 0, cmdr(1), 21), true, ['Commander damage 21 from Ben']],
+    ['commander 21 from the partner slot', () => applyChange(partnered(), 0, cmdr(1, 1), 21), true, ["Commander damage 21 from Ben's partner"]],
+    ['commander 20', () => applyChange(three(), 0, cmdr(1), 20), false, []],
+    ['15 + 15 from a partner pair', () => applyChange(applyChange(partnered(), 0, cmdr(1, 0), 15), 0, cmdr(1, 1), 15), false, []],
+  ] as const)('%s: dead %s, warnings unchanged', (_name, make, dead, said) => {
+    const g = make();
+    expect(isDead(g, 0)).toBe(dead);
+    expect(warnings(g, 0)).toEqual(said);
+  });
+
+  it('is judged per seat: a dead seat does not make its neighbours dead', () => {
+    const g = life(0);
+    expect([isDead(g, 0), isDead(g, 1), isDead(g, 2)]).toEqual([true, false, false]);
+  });
+
+  it('is false for a seat that does not exist', () => {
+    const g = three();
+    expect(isDead(g, -1)).toBe(false);
+    expect(isDead(g, 3)).toBe(false);
+    expect(isDead(g, 1.5)).toBe(false);
+    expect(isDead(g, Number.NaN)).toBe(false);
+  });
+
+  it('follows undo and reset: derived from the counters, never stored', () => {
+    const g = life(0);
+    expect(isDead(undo(g), 0)).toBe(false);
+    expect(isDead(resetGame(g), 0)).toBe(false);
+    expect('dead' in g.players[0]).toBe(false);
   });
 });
 
@@ -538,5 +706,156 @@ describe('randomSeat', () => {
       seen.add(n);
     }
     expect(seen.size).toBe(4);
+  });
+});
+
+describe('seat art and accent', () => {
+  const art = (over: Partial<ArtRef> = {}): ArtRef => ({ id: 'illus-1', cardId: 'card-1', name: 'Edgar Markov', artist: 'Eric Deschamps', url: 'https://cards.scryfall.io/art_crop/front/a/b/ab.jpg?1', ...over });
+  const load = (raw: unknown) => loadLife(fakeStorage({ [LIFE_KEY]: JSON.stringify(raw) })).store;
+  const gameWith = (players: unknown[]) => ({ version: 1, game: { startingLife: 40, players }, setup: {} });
+  const seat = (extra: Record<string, unknown>) => ({ name: 'A', life: 40, ...extra });
+
+  it('setArt and setAccent return new games, change only that seat, and are not undoable', () => {
+    const g = changeLife(three(), 0, -2);
+    const a = setArt(g, 1, art());
+    expect(a).not.toBe(g);
+    expect(a.players[1].art).toEqual(art());
+    expect(a.players[0].art).toBeUndefined();
+    expect(a.history).toEqual(g.history);
+    const b = setAccent(a, 2, '#B3261E');
+    expect(b.players[2].accent).toBe('#b3261e');
+    expect(b.players[1].accent).toBeUndefined();
+    expect(b.history).toEqual(g.history);
+    expect(g.players[1].art).toBeUndefined();
+  });
+
+  it('null removes the art or accent; removing what is not there changes nothing', () => {
+    const g = setAccent(setArt(three(), 0, art()), 0, '#123456');
+    const cleared = setAccent(setArt(g, 0, null), 0, null);
+    expect(cleared.players[0]).not.toHaveProperty('art');
+    expect(cleared.players[0]).not.toHaveProperty('accent');
+    expect(setArt(three(), 0, null).players).toEqual(three().players);
+  });
+
+  it('ignores a seat that does not exist, a malformed art and a bad accent', () => {
+    const g = three();
+    expect(setArt(g, 9, art())).toBe(g);
+    expect(setAccent(g, 9, '#123456')).toBe(g);
+    expect(setArt(g, 0, art({ url: 'http://cards.scryfall.io/x.jpg' }))).toBe(g);
+    expect(setAccent(g, 0, 'red')).toBe(g);
+    expect(setAccent(g, 0, '#12')).toBe(g);
+  });
+
+  it('keeps art and accent through undo, reset and the other setters', () => {
+    let g = setAccent(setArt(three(), 0, art()), 0, '#123456');
+    g = changeLife(g, 0, -3);
+    for (const next of [undo(g), resetGame(g), setName(g, 0, 'Zed'), setColor(g, 0, 3)]) {
+      expect(next.players[0].art).toEqual(art());
+      expect(next.players[0].accent).toBe('#123456');
+    }
+  });
+
+  it('round-trips art and accent in the game and the setup', () => {
+    const s = fakeStorage();
+    const store = emptyLife();
+    store.setup = { players: 3, startingLife: 40, names: [], colors: [], arts: [art(), null, art({ id: 'illus-2' })], accents: ['#123456', null, '#abcdef'] };
+    store.game = setAccent(setArt(newGame(store.setup), 1, art({ id: 'illus-3' })), 1, '#654321');
+    expect(saveLife(s, store)).toBe(true);
+    const back = loadLife(s).store;
+    expect(back.setup).toEqual(store.setup);
+    expect(back.game?.players[1]).toMatchObject({ art: art({ id: 'illus-3' }), accent: '#654321' });
+    expect(back.game?.players[0]).toMatchObject({ art: art(), accent: '#123456' });
+  });
+
+  it('loads an older store without any of it exactly as before', () => {
+    const store = load({ version: 1, game: { startingLife: 40, players: [{ name: 'A', life: 40 }] }, setup: { players: 2, startingLife: 30, names: ['A'], colors: [1] } });
+    expect(store.game!.players[0]).not.toHaveProperty('art');
+    expect(store.game!.players[0]).not.toHaveProperty('accent');
+    expect(store.setup).toEqual({ players: 2, startingLife: 30, names: ['A'], colors: [1] });
+    expect(store.setup).not.toHaveProperty('arts');
+    expect(store.setup).not.toHaveProperty('accents');
+  });
+
+  it('drops an art of the wrong shape, and keeps the player', () => {
+    const bad: unknown[] = [
+      null,
+      [],
+      [art()],
+      'https://cards.scryfall.io/x.jpg',
+      42,
+      {},
+      art({ id: undefined as unknown as string }),
+      art({ cardId: 7 as unknown as string }),
+      art({ name: '' }),
+      art({ artist: '' }),
+      art({ url: undefined as unknown as string }),
+      art({ url: 'javascript:alert(1)' }),
+      art({ url: 'http://cards.scryfall.io/x.jpg' }),
+      art({ url: 'data:image/png;base64,AAAA' }),
+      art({ url: 'https://' }),
+      art({ url: 'not a url' }),
+      art({ url: `https://cards.scryfall.io/${'x'.repeat(400)}` }),
+      art({ name: 'n'.repeat(81) }),
+      art({ artist: 'a'.repeat(81) }),
+      art({ id: 'i'.repeat(65) }),
+      art({ cardId: 'c'.repeat(65) }),
+    ];
+    for (const a of bad) {
+      const store = load(gameWith([seat({ art: a })]));
+      expect(store.game!.players).toHaveLength(1);
+      expect(store.game!.players[0]).not.toHaveProperty('art');
+    }
+  });
+
+  it('keeps only the five known fields of a good art', () => {
+    const store = load(gameWith([seat({ art: { ...art(), extra: 'x', onload: 'bad()' } })]));
+    expect(store.game!.players[0].art).toEqual(art());
+  });
+
+  it('drops an accent that is not #rrggbb and lowercases one that is', () => {
+    for (const bad of ['red', '#12', '#12345', '#1234567', '#gggggg', '123456', 7, null, ['#123456'], { a: 1 }]) {
+      expect(load(gameWith([seat({ accent: bad })])).game!.players[0]).not.toHaveProperty('accent');
+    }
+    expect(load(gameWith([seat({ accent: '#ABCDEF' })])).game!.players[0].accent).toBe('#abcdef');
+  });
+
+  it('repairs the setup arrays: bad entries become null, the lists are cut to six, a non-array is dropped', () => {
+    const raw = { version: 1, game: null, setup: { arts: [art(), 'x', null, { id: 1 }, art({ url: 'http://a/b' }), art({ id: 'z' }), art({ id: 'seventh' })], accents: ['#123456', 'red', 5, null, '#ABCDEF', '#000000', '#ffffff'] } };
+    const { setup } = load(raw);
+    expect(setup.arts).toEqual([art(), null, null, null, null, art({ id: 'z' })]);
+    expect(setup.accents).toEqual(['#123456', null, null, null, '#abcdef', '#000000']);
+    for (const bad of ['x', 3, null, { 0: art() }]) {
+      const s = load({ version: 1, game: null, setup: { arts: bad, accents: bad } }).setup;
+      expect(s).not.toHaveProperty('arts');
+      expect(s).not.toHaveProperty('accents');
+    }
+  });
+
+  it('newGame gives each seat its art and accent from the setup by index', () => {
+    const g = newGame({ players: 3, startingLife: 40, names: [], colors: [], arts: [art(), null], accents: [null, '#123456', 'red' as unknown as string] });
+    expect(g.players[0].art).toEqual(art());
+    expect(g.players[1]).not.toHaveProperty('art');
+    expect(g.players[1].accent).toBe('#123456');
+    expect(g.players[2]).not.toHaveProperty('art');
+    expect(g.players[2]).not.toHaveProperty('accent');
+    // Nothing from the setup means nothing on the player, and the old setup shape still works.
+    expect(newGame({ players: 2, startingLife: 40, names: [], colors: [] }).players[0]).not.toHaveProperty('art');
+  });
+
+  it('newGame does not share the art object with the setup', () => {
+    const setup = { players: 1, startingLife: 40, names: [], colors: [], arts: [art()] };
+    expect(newGame(setup).players[0].art).not.toBe(setup.arts[0]);
+  });
+
+  it('gameFromDefaults carries names, colors, art and accent by seat and drops them past the player count', () => {
+    const store = emptyLife();
+    store.defaults = { players: 2, startingLife: 40 };
+    store.setup = { players: 4, startingLife: 40, names: ['Ann', 'Bo'], colors: [3, -1], arts: [null, art(), art({ id: 'z' }), null], accents: ['#123456', null, '#abcdef', null] };
+    const g = gameFromDefaults(store);
+    expect(g.players).toHaveLength(2);
+    expect(g.players[0]).toMatchObject({ name: 'Ann', color: 3, accent: '#123456' });
+    expect(g.players[0]).not.toHaveProperty('art');
+    expect(g.players[1].art).toEqual(art());
+    expect(g.players[1]).not.toHaveProperty('accent');
   });
 });

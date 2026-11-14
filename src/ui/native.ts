@@ -3,8 +3,8 @@ import { backTarget } from '../lib/nav';
 
 /**
  * Inside the Android app, the system back gesture (swipe from the screen edge) or button follows
- * `backTarget`: out of a life-counter game to its setup, then to "Your decks" from any other screen,
- * and out of the app only from there. Browsers keep their own back.
+ * `backTarget`: to "Your decks" from any other screen, the Life Counter game included (it is that tab's
+ * only screen), and out of the app only from there. Browsers keep their own back.
  */
 export async function installNativeBack(): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
@@ -19,4 +19,18 @@ export async function installNativeBack(): Promise<void> {
     if (target) location.replace(target);
     else void App.exitApp();
   });
+}
+
+/**
+ * One short buzz, where the platform offers it (`navigator.vibrate`: Android Chrome and the Android app's WebView; not iOS).
+ * It does nothing under reduced motion, when `vibrate` is missing, or when the browser refuses; it never throws.
+ */
+export function buzz(ms = 80): void {
+  try {
+    if (typeof navigator.vibrate !== 'function') return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    navigator.vibrate(ms);
+  } catch {
+    // A blocked or broken vibrate is not worth a message.
+  }
 }

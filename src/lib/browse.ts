@@ -65,7 +65,7 @@ export type Field = 'form' | 'advanced' | 'set' | 'type' | 'tribe' | 'keyword' |
 
 export type QueryResult = { ok: true; q: string } | { ok: false; field: Field; error: string };
 
-const quote = (word: string) => `"${word.replace(/[\\"]/g, '\\$&')}"`;
+export const quote = (word: string) => `"${word.replace(/[\\"]/g, '\\$&')}"`;
 const words = (text: string) => text.split(/\s+/).filter(Boolean);
 
 /** True when every "(" has its ")" once quoted text and /regex/ text are set aside. */

@@ -1,6 +1,8 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { composite, contrastRatio, effectiveBackground, parseColor } from '../support/contrast';
-import { openEdgarDeck, paneBar, row, seedEdgarDeck, showPane, suggestionsPanel } from './helpers';
+import { bandsPng } from '../support/png';
+import { editPlayers, start } from './life-helpers';
+import { mockArt, openEdgarDeck, paneBar, row, seedEdgarDeck, showPane, suggestionsPanel } from './helpers';
 
 // Phone layout fixes (docs/superpowers/plans/2026-11-04-phone-layout.md). These check what the page
 // really renders, in both colour schemes. They never assert prices: re-recording fixtures moves them.
@@ -417,3 +419,143 @@ test('the browser bar colour follows the colour scheme', async ({ page }) => {
   expect(find('light')?.content).toBe('#ffffff');
   expect(find('dark')?.content).toBe('#242424');
 });
+
+// Life Counter, two players face to face (docs/superpowers/plans/2026-11-13-life-counter-slice-1.md, Task 4).
+for (const size of [
+  { width: 390, height: 844 },
+  { width: 360, height: 640 },
+]) {
+  test(`life counter ${size.width}x${size.height}: the default game is two tall tiles, the top one upside down, nothing clipped`, async ({ page }) => {
+    await page.setViewportSize(size);
+    await start(page);
+    const tiles = page.locator('.tile');
+    await expect(tiles).toHaveCount(2);
+    await expect(page.locator('.table-row.top .tile')).toHaveAttribute('data-player', '1');
+    await expect(page.locator('.table-row.top .tile-inner')).toHaveCSS('transform', /matrix\(-1, ?[^,]*, ?[^,]*, ?-1/);
+    await expect(page.locator('.table-row.bottom .tile')).toHaveAttribute('data-player', '0');
+    const boxes = await tiles.evaluateAll((els) =>
+      els.map((el) => {
+        const t = el.getBoundingClientRect();
+        const inner = [el.querySelector('.tile-life'), ...el.querySelectorAll('.life-btn')].map((x) => {
+          const r = x!.getBoundingClientRect();
+          return { top: r.top, bottom: r.bottom, left: r.left, right: r.right, h: r.height };
+        });
+        return { top: t.top, bottom: t.bottom, left: t.left, right: t.right, h: t.height, inner };
+      }),
+    );
+    const vh = size.height;
+    for (const b of boxes) {
+      expect(b.h, 'tile height').toBeGreaterThanOrEqual(vh * 0.4);
+      expect(b.inner).toHaveLength(3);
+      for (const r of b.inner) {
+        expect(r.h, 'life number and buttons are at least 44px tall').toBeGreaterThanOrEqual(44);
+        expect(r.top).toBeGreaterThanOrEqual(b.top - 0.5);
+        expect(r.bottom).toBeLessThanOrEqual(b.bottom + 0.5);
+        expect(r.left).toBeGreaterThanOrEqual(b.left - 0.5);
+        expect(r.right).toBeLessThanOrEqual(b.right + 0.5);
+      }
+    }
+    // The menu button sits in the middle, between the tiles, and is reachable.
+    const menu = page.getByRole('button', { name: 'Game menu' });
+    const m = (await menu.boundingBox())!;
+    const [topTile, bottomTile] = boxes.map((b) => b).sort((a, b) => a.top - b.top);
+    expect(Math.abs(m.x + m.width / 2 - size.width / 2)).toBeLessThan(2);
+    expect(m.y + m.height / 2).toBeGreaterThan(topTile.bottom - 2);
+    expect(m.y + m.height / 2).toBeLessThan(bottomTile.top + 2);
+    await menu.click();
+    await expect(page.getByRole('dialog', { name: 'Game menu' })).toBeVisible();
+  });
+}
+
+// Life Counter art and accent controls on a phone (docs/superpowers/plans/2026-11-13-life-counter-slice-2.md, Task 4):
+// every control a thumb must hit is 44px, nothing is clipped sideways, and Close stays in view however long the dialog is.
+for (const size of [
+  { width: 390, height: 844 },
+  { width: 360, height: 640 },
+]) {
+  for (const players of [2, 4]) {
+    test(`life counter edit dialog ${size.width}x${size.height}, ${players} players: art, swatches and fields are 44px, unclipped, and Close stays reachable`, async ({ page }) => {
+      await page.setViewportSize(size);
+      const art = await mockArt(page);
+      art.image = { body: bandsPng([[240, 210, 40], [200, 30, 30], [30, 30, 200], [30, 160, 60]]), type: 'image/png' };
+      await start(page, { players });
+      const dlg = await editPlayers(page);
+      // Every seat gets art, so every row shows its suggestions.
+      for (let seat = 1; seat <= players; seat++) {
+        await page.getByRole('button', { name: `Choose art for player ${seat}` }).click();
+        const p = page.getByRole('dialog', { name: `Art for Player ${seat}` });
+        await p.getByRole('textbox', { name: 'Card name or artist' }).fill('delver');
+        await p.getByRole('button', { name: 'Search', exact: true }).click();
+        await p.getByRole('button', { name: 'Dungeon Delver, art by Josh Freydkis', exact: true }).click();
+        await expect(page.getByRole('group', { name: `Suggested accents for player ${seat}` }).getByRole('button')).toHaveCount(4);
+      }
+
+      const measure = () =>
+        dlg.evaluate((d) => {
+          const box = d.getBoundingClientRect();
+          const out: string[] = [];
+          const sel = '.swatch, .art-line .button, .accent-custom, .player-row > input';
+          for (const el of d.querySelectorAll<HTMLElement>(sel)) {
+            const r = el.getBoundingClientRect();
+            const name = el.getAttribute('aria-label') ?? el.textContent?.trim() ?? el.className;
+            if (r.width < 43.5 || r.height < 43.5) out.push(`${name}: ${r.width}x${r.height} is under 44px`);
+            if (r.left < box.left - 0.5 || r.right > box.right + 0.5) out.push(`${name}: clipped sideways (${r.left}..${r.right} in ${box.left}..${box.right})`);
+          }
+          if (d.scrollWidth > d.clientWidth + 1) out.push(`the dialog scrolls sideways (${d.scrollWidth} > ${d.clientWidth})`);
+          return out;
+        });
+      expect(await measure()).toEqual([]);
+      // Scroll to the last seat: still measured and unclipped, and Close is on screen at the top and at the bottom of the scroll.
+      const close = dlg.getByRole('button', { name: 'Close' });
+      const inView = async () => {
+        const b = (await close.boundingBox())!;
+        expect(b.y, 'Close top').toBeGreaterThanOrEqual(0);
+        expect(b.y + b.height, 'Close bottom').toBeLessThanOrEqual(size.height + 0.5);
+        expect(b.height).toBeGreaterThanOrEqual(43.5);
+        // Nothing covers it: the point at its middle is the button.
+        const hit = await close.evaluate((el) => {
+          const r = el.getBoundingClientRect();
+          const at = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+          return at === el || el.contains(at);
+        });
+        expect(hit, 'Close is not covered').toBe(true);
+      };
+      await inView();
+      await dlg.evaluate((d) => (d.scrollTop = d.scrollHeight));
+      await inView();
+      expect(await measure()).toEqual([]);
+      await expect(dlg.getByRole('textbox', { name: `Custom accent for player ${players}` })).toBeInViewport();
+    });
+  }
+
+  test(`art picker ${size.width}x${size.height}: search, switch, filters and cells are 44px and unclipped`, async ({ page }) => {
+    await page.setViewportSize(size);
+    await mockArt(page);
+    await start(page);
+    await editPlayers(page);
+    await page.getByRole('button', { name: 'Choose art for player 1' }).click();
+    const p = page.getByRole('dialog', { name: 'Art for Player 1' });
+    await p.getByRole('textbox', { name: 'Card name or artist' }).fill('delver');
+    await p.getByRole('button', { name: 'Search', exact: true }).click();
+    await expect(p.locator('.art-cell').first()).toBeVisible();
+    const problems = await p.evaluate((d) => {
+      const box = d.getBoundingClientRect();
+      const out: string[] = [];
+      for (const el of d.querySelectorAll<HTMLElement>('input[type=text], .button, .segment, summary, .art-cell')) {
+        if (el.getClientRects().length === 0) continue;
+        const r = el.getBoundingClientRect();
+        const name = el.getAttribute('aria-label') ?? el.textContent?.trim().slice(0, 24) ?? el.className;
+        if (el.matches('.art-cell') ? r.height < 44 : r.height < 43.5) out.push(`${name}: height ${r.height}`);
+        if (!el.matches('.art-cell') && r.width < 43.5) out.push(`${name}: width ${r.width}`);
+        if (r.left < box.left - 0.5 || r.right > box.right + 0.5) out.push(`${name}: clipped sideways`);
+      }
+      if (d.scrollWidth > d.clientWidth + 1) out.push('the picker scrolls sideways');
+      return out;
+    });
+    expect(problems).toEqual([]);
+    await p.locator('summary').click();
+    await expect(p.locator('.more-filters .own-label').first()).toBeVisible();
+    const labels = await p.locator('.more-filters .own-label').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().height));
+    for (const h of labels) expect(h).toBeGreaterThanOrEqual(43.5);
+  });
+}

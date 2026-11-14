@@ -20,6 +20,11 @@ export interface ScryCard {
   oracle_text?: string;
   /** Popularity across all Commander decks on EDHREC; 1 is the most played card. */
   edhrec_rank?: number;
+  /** Who painted the card's art; with `illustration_id` it names one artwork across all printings. */
+  artist?: string;
+  illustration_id?: string;
+  /** How good the card image is: missing, placeholder, lowres or highres_scan. */
+  image_status?: string;
   color_identity: string[];
   /** Legality by format ("legal", "not_legal", "banned", "restricted"); only Commander is kept in most fixtures. */
   legalities: { commander?: string } & Record<string, string | undefined>;
@@ -29,7 +34,7 @@ export interface ScryCard {
   tcgplayer_etched_id?: number;
   purchase_uris?: { tcgplayer?: string };
   image_uris?: { small?: string; normal?: string; art_crop?: string };
-  card_faces?: Array<{ name: string; oracle_id?: string; type_line?: string; mana_cost?: string; oracle_text?: string; power?: string; toughness?: string; image_uris?: { small?: string; normal?: string; art_crop?: string } }>;
+  card_faces?: Array<{ name: string; artist?: string; illustration_id?: string; oracle_id?: string; type_line?: string; mana_cost?: string; oracle_text?: string; power?: string; toughness?: string; image_uris?: { small?: string; normal?: string; art_crop?: string } }>;
 }
 
 export interface ScryList<T> {

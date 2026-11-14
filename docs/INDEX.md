@@ -20,6 +20,7 @@ Status: **current** = in force or in progress; **draft** = proposed, not approve
 - [ADR-004-apk-signing-and-data-safety.md](decisions/ADR-004-apk-signing-and-data-safety.md) — current, 2026-11-02 — One permanent signing key for every Swapsmith APK, deck backup and restore in the app, and the rules that keep users' decks across updates
 - [ADR-005-edhrec-commander-data.md](decisions/ADR-005-edhrec-commander-data.md) — current, 2026-11-04 — Uses EDHREC's unofficial per-commander JSON (inclusion, synergy, themes, brackets, average deck) as the main recommendation signal, called from the browser, with Scryfall rules as the fallback
 - [ADR-006-cheapest-printing-search-and-bounded-cache.md](decisions/ADR-006-cheapest-printing-search-and-bounded-cache.md) — current, 2026-11-12 — Prices a deck with one cheapest-printing search per ~15 cards instead of downloading every printing, loads printings only when the picker opens, and keeps the reply cache bounded and usable offline for a week
+- [ADR-007-life-counter-art-cache.md](decisions/ADR-007-life-counter-art-cache.md) — current, 2026-11-14 — Life Counter card art is saved as image blobs in its own IndexedDB database with count, size and per-image caps and a keep set, so seats show art offline; why not a URL alone or the service-worker cache
 - [README.md](decisions/README.md) — current, 2026-10-29 — How to write ADRs: naming, front matter, status rules, never rewrite accepted ADRs
 
 ## docs/research/
@@ -40,6 +41,10 @@ Status: **current** = in force or in progress; **draft** = proposed, not approve
 - [2026-11-05-suggestions-tab-status.md](superpowers/plans/2026-11-05-suggestions-tab-status.md) — done, 2026-11-05 — A small status badge on the Suggestions tab (Searching, Ready, Failed) so a search started in the Suggestions pane is visible from the Cards pane on a phone — one test-gated slice
 - [2026-11-05-undo-remove-and-short-rows.md](superpowers/plans/2026-11-05-undo-remove-and-short-rows.md) — done, 2026-11-05 — Two follow-ups from the 2026-11-05 UI critique (29/40) — Undo for removing a card, and shorter phone list rows by showing a quantity only above 1
 - [2026-11-06-swap-from-card.md](superpowers/plans/2026-11-06-swap-from-card.md) — done, 2026-11-06 — Plan for swap from a card — tap a deck card, see similar cards from decks with the same commander, popularity and comparison side by side, swap in one tap; five test-gated slices
+- [2026-11-13-life-counter-slice-1.md](superpowers/plans/2026-11-13-life-counter-slice-1.md) — done, 2026-11-13 — Plan for Life Counter slice 1 — the tab opens straight into a saved default 2-player 40-life game, New game and Defaults sheets replace the setup screen, reset needs no confirm (with an undo toast), face-to-face 2-player layout checked; four test-gated tasks
+- [2026-11-13-life-counter-slice-2.md](superpowers/plans/2026-11-13-life-counter-slice-2.md) — done, 2026-11-13 — Plan for Life Counter slice 2 — card art on any seat (search by name or artist with colour, type and legendary filters, random, cached offline), full-bleed art tiles that stay readable, and accent colours suggested from the art plus a custom picker; four test-gated tasks
+- [2026-11-14-life-counter-slice-3.md](superpowers/plans/2026-11-14-life-counter-slice-3.md) — done, 2026-11-14 — Plan for Life Counter slice 3 — saved pod profiles (name, card art, accent colour) picked per seat, kept in the Life Counter store and carried in deck backup and restore; three test-gated tasks
+- [2026-11-14-life-counter-slice-4.md](superpowers/plans/2026-11-14-life-counter-slice-4.md) — done, 2026-11-14 — Plan for Life Counter slice 4 — a seat that takes lethal damage (life 0, 10 poison, 21 from one commander) plays a blood splatter that settles into a skull while its art darkens and greys; reversible, reduced-motion safe, no network; two test-gated tasks
 
 ## docs/superpowers/specs/
 
@@ -48,6 +53,7 @@ Status: **current** = in force or in progress; **draft** = proposed, not approve
 - [2026-11-04-browse-tab.md](superpowers/specs/2026-11-04-browse-tab.md) — current, 2026-11-04 — Browse tab spec — search every card by name, set, type, tribe, keyword, role, color identity, mana value, rarity and price (plus raw Scryfall syntax), image grid or list, sorting, Load more, and a card detail with Add to deck and Mark as owned
 - [2026-11-04-tab-bar-life-counter.md](superpowers/specs/2026-11-04-tab-bar-life-counter.md) — current, 2026-11-04 — Tab bar and Life Counter spec — bottom tabs (Decks, Browse, Life Counter) with hash routes and per-tab place, plus an offline 1–6 player life counter with commander damage, poison, undo, wake lock and a saved game
 - [2026-11-06-swap-from-card.md](superpowers/specs/2026-11-06-swap-from-card.md) — current, 2026-11-06 — Swap from a card design — tap a deck card, see similar cards from decks with the same commander that fit the deck's mechanics, with popularity and a plain comparison side by side, and swap in one tap
+- [2026-11-13-life-counter-art.md](superpowers/specs/2026-11-13-life-counter-art.md) — current, 2026-11-14 — Life Counter art revamp spec — opens straight into a saved default 2-player 40-life game, card-art tiles from any Scryfall card (search, filters, random, cached offline), accent colours suggested from the art, pod profiles in deck backup, and a splatter-to-skull death effect
 
 ## tutorial/
 
