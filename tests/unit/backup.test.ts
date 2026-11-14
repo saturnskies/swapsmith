@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { backupFileName, BackupError, makeBackup, mergeBackup, parseBackup } from '../../src/lib/backup';
+import { backupFileName, BackupError, makeBackup, mergeBackup, parseBackup, readBackupProfiles } from '../../src/lib/backup';
 import { cleanDeckName, type Deck } from '../../src/lib/deck';
 import { emptyStore, type Store } from '../../src/lib/storage';
 import { backTarget } from '../../src/lib/nav';
+import type { Profile } from '../../src/lib/profiles';
 
 const deck = (id: string, name: string, updatedAt: string): Deck => ({
   id,
@@ -52,6 +53,66 @@ describe('backup round trip', () => {
     const out = parseBackup(old);
     expect(out.decks.find((d) => d.id === 'a')!.owned).toEqual(['o-sol']);
     expect(out.decks.find((d) => d.id === 'b')!.owned).toEqual(['o-signet']);
+  });
+});
+
+describe('backup profiles', () => {
+  const profiles: Profile[] = [
+    { id: 'p1', name: 'Ann', accent: '#123456', art: { id: 'i', cardId: 'c', name: 'Edgar Markov', artist: 'Eric Deschamps', url: 'https://cards.scryfall.io/art_crop/front/a/b/ab.jpg?1' } },
+    { id: 'p2', name: 'Bo' },
+  ];
+  const file = (extra: Record<string, unknown>) => JSON.stringify({ app: 'swapsmith', backup: 1, store: { decks: [] }, ...extra });
+
+  it('makeBackup then readBackupProfiles round-trips', () => {
+    expect(readBackupProfiles(makeBackup(store({}), new Date(), profiles))).toEqual(profiles);
+  });
+
+  it('writes no profiles field when there are none, and the rest of the file is unchanged', () => {
+    const now = new Date('2026-11-14T10:00:00Z');
+    const plain = makeBackup(store({}), now);
+    expect(JSON.parse(plain)).not.toHaveProperty('profiles');
+    expect(makeBackup(store({}), now, [])).toBe(plain);
+    const withProfiles = JSON.parse(makeBackup(store({}), now, profiles));
+    expect(withProfiles).toMatchObject({ app: 'swapsmith', backup: 1, exportedAt: now.toISOString() });
+    const { profiles: _p, ...rest } = withProfiles;
+    expect(rest).toEqual(JSON.parse(plain));
+  });
+
+  it.each([
+    ['a string', file({ profiles: 'x' })],
+    ['an object', file({ profiles: { id: 'a', name: 'b' } })],
+    ['null', file({ profiles: null })],
+    ['no field', file({})],
+  ])('gives [] for profiles that are %s', (_, text) => {
+    expect(readBackupProfiles(text)).toEqual([]);
+  });
+
+  it('cleans odd entries like the store does', () => {
+    const raw = [7, { id: 'a' }, { id: 'b', name: 'x'.repeat(500), accent: 'red' }, { id: 'b', name: 'dup' }, ...Array.from({ length: 100 }, (_, i) => ({ id: `q${i}`, name: 'N' }))];
+    const out = readBackupProfiles(file({ profiles: raw }));
+    expect(out).toHaveLength(12);
+    expect(out[0]).toEqual({ id: 'b', name: 'x'.repeat(24) });
+  });
+
+  it.each([
+    ['not json', 'not json'],
+    ['empty', ''],
+    ['json null', 'null'],
+    ['an array', '[]'],
+    ['a different app', JSON.stringify({ app: 'other', backup: 1, store: {}, profiles })],
+    ['a newer format', JSON.stringify({ app: 'swapsmith', backup: 2, store: {}, profiles })],
+    ['no store', JSON.stringify({ app: 'swapsmith', backup: 1, profiles })],
+  ])('readBackupProfiles throws BackupError for %s, as parseBackup does', (_, text) => {
+    expect(() => readBackupProfiles(text)).toThrow(BackupError);
+    expect(() => parseBackup(text)).toThrow(BackupError);
+  });
+
+  it('parseBackup of a file with profiles returns the same Store as without', () => {
+    const s = store({ decks: [{ ...deck('a', 'Edgar', '2026-01-01T00:00:00Z'), owned: ['o-sol'], unownedBasics: [] }], prefs: { view: 'grid' } });
+    const now = new Date();
+    expect(parseBackup(makeBackup(s, now, profiles))).toEqual(parseBackup(makeBackup(s, now)));
+    expect(parseBackup(makeBackup(s, now, profiles))).toEqual(s);
+    expect(parseBackup(makeBackup(s, now, profiles))).not.toHaveProperty('profiles');
   });
 });
 
