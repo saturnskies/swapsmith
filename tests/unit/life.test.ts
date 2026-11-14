@@ -120,6 +120,40 @@ describe('parseStartingLife', () => {
 });
 
 describe('loadLife and saveLife', () => {
+  describe('profiles', () => {
+    const profile = (id: string, extra: Record<string, unknown> = {}) => ({ id, name: `N${id}`, ...extra });
+    const loadRaw = (raw: unknown) => loadLife(fakeStorage({ [LIFE_KEY]: JSON.stringify(raw) })).store;
+
+    it('a store saved without profiles loads with none', () => {
+      const s = loadRaw({ version: 1, game: null, setup: {}, defaults: {} });
+      expect(s.profiles ?? []).toEqual([]);
+      expect(loadLife(fakeStorage()).store.profiles ?? []).toEqual([]);
+    });
+
+    it('junk loads clean: bad entries dropped, duplicates removed, capped at 12', () => {
+      expect(loadRaw({ version: 1, profiles: 'x' }).profiles ?? []).toEqual([]);
+      expect(loadRaw({ version: 1, profiles: { id: 'a', name: 'b' } }).profiles ?? []).toEqual([]);
+      const junk = [7, null, { id: 'a' }, profile('b', { accent: 'red', art: { id: 'x' } }), profile('b'), ...Array.from({ length: 500 }, (_, i) => profile(`p${i}`))];
+      const out = loadRaw({ version: 1, profiles: junk }).profiles!;
+      expect(out).toHaveLength(12);
+      expect(out[0]).toEqual({ id: 'b', name: 'Nb' });
+    });
+
+    it('round-trips through saveLife', () => {
+      const s = fakeStorage();
+      const store = emptyLife();
+      store.profiles = [{ id: 'p1', name: 'Ann', accent: '#123456', art: { id: 'i', cardId: 'c', name: 'Edgar', artist: 'Eric', url: 'https://cards.scryfall.io/a.jpg' } }, { id: 'p2', name: 'Bo' }];
+      expect(saveLife(s, store)).toBe(true);
+      expect(loadLife(s).store.profiles).toEqual(store.profiles);
+    });
+
+    it('a future-version store still leaves the saved data alone and loads no profiles', () => {
+      const r = loadLife(fakeStorage({ [LIFE_KEY]: JSON.stringify({ version: 2, profiles: [profile('a')] }) }));
+      expect(r.future).toBe(true);
+      expect(r.store.profiles ?? []).toEqual([]);
+    });
+  });
+
   it('starts empty when nothing is saved', () => {
     const r = loadLife(fakeStorage());
     expect(r).toMatchObject({ persistent: true, future: false });
