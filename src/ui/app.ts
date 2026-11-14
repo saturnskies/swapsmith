@@ -111,7 +111,7 @@ export function startApp(root: HTMLElement): void {
   const bar = createTabBar();
   document.body.append(bar.el);
   renderBrowse(views.browse, ctx, storage);
-  const life = createLife(storage);
+  const life = createLife(storage, ctx.client);
 
   /** Where each tab was left (its last route and window scroll), for coming back to it. */
   const last: Record<Tab, string> = { decks: '#/', browse: '#/browse', life: lifeRoute() };
