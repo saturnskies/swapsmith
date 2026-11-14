@@ -32,10 +32,12 @@ import {
 } from '../lib/life';
 import { randomArt } from '../scryfall/art';
 import type { ScryfallClient } from '../scryfall/client';
+import { MAX_PROFILES, addProfile, applyProfile, deleteProfile, mergeProfiles as mergeInto, newProfileId, profileFromSeat, renameProfile, type Profile } from '../lib/profiles';
 import { openArtPicker } from './artPicker';
 import { createArtStore, isArtUrl, type ArtStore } from './artStore';
 import { segmented } from './controls';
 import { h, icon } from './dom';
+import { openProfilePicker } from './profilePicker';
 
 /** A press this long (ms) counts as a hold: ±10 instead of ±1. */
 const HOLD_MS = 500;
@@ -52,6 +54,11 @@ const RANDOM_FAILED = "Couldn't find art, try again";
 const SESSION_ONLY = "This art won't be kept after you close the app: your browser is blocking storage.";
 /** An id nothing is saved under: asking the art store to delete it says whether storage answers at all. */
 const PROBE = '__probe__';
+const NEED_NAME = 'Give this player a name first';
+const PROFILES_FULL = `You already have ${MAX_PROFILES} saved players. Delete one in the game menu under Profiles first.`;
+const STILL_SAVING = 'Still saving the last art. Try again in a moment.';
+const NO_SAVED = 'No saved players yet. Use Save as profile on a seat in Edit names & colors.';
+const artUnavailable = (name: string) => `Couldn't load the art for ${name}, so only its name and accent were applied.`;
 
 export interface Life {
   hasGame(): boolean;
@@ -65,6 +72,10 @@ export interface Life {
   render(view: HTMLElement): void;
   /** True while the game screen is showing: keeps the screen awake then, and lets go otherwise. */
   setAwake(on: boolean): void;
+  /** The saved profiles, for the backup section. */
+  profiles(): Profile[];
+  /** Adds profiles from a backup (never deletes, keeps the current copy of a shared id, stops at the cap) and saves; says how many were added and skipped. */
+  mergeProfiles(incoming: Profile[]): { added: number; skipped: number };
 }
 
 /** A button that changes a counter: tap = ±1, hold = ±10 once, Shift+Enter = ±10. `delta` is 1 or -1. */
@@ -121,11 +132,20 @@ interface AccentActions {
   set(seat: number, hex: string | null): void;
 }
 
-/** The seat rows' handles: redraw one seat's art line, or say something under it. */
+/** What the player rows need to save a seat as a profile or fill it from one. */
+interface ProfileActions {
+  save(seat: number): void;
+  use(seat: number): void;
+}
+
+/** The seat rows' handles: redraw one seat's art line, say something under it, or show a seat's name and accent after a profile was used. */
 interface PlayerRows {
   el: HTMLElement;
   refresh(seat: number): void;
   note(seat: number, text: string): void;
+  profileNote(seat: number, text: string): void;
+  /** The seat's name, accent and art were replaced from outside (a profile): show them in the row. */
+  applied(seat: number): void;
 }
 
 const DICE = ['M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z', 'M8.5 8.5h.01M15.5 8.5h.01M12 12h.01M8.5 15.5h.01M15.5 15.5h.01'];
@@ -146,8 +166,11 @@ function playerRows(o: {
   onColor(seat: number, color: number): void;
   art: ArtActions;
   accent: AccentActions;
+  profile: ProfileActions;
 }): PlayerRows {
   interface Line {
+    input: HTMLInputElement;
+    profileNote: HTMLElement;
     credit: HTMLElement;
     remove: HTMLElement;
     note: HTMLElement;
@@ -263,7 +286,12 @@ function playerRows(o: {
           accentNote.textContent = NOT_A_COLOR;
         }
       });
-      lines.set(seat, { credit, remove, note, palette, choices, custom, accentNote });
+      const saveProfile = h('button', { type: 'button', class: 'button small', 'aria-label': `Save as profile for player ${seat + 1}` }, 'Save as profile');
+      saveProfile.addEventListener('click', () => o.profile.save(seat));
+      const useProfile = h('button', { type: 'button', class: 'button small', 'aria-label': `Use profile for player ${seat + 1}` }, 'Use profile');
+      useProfile.addEventListener('click', () => o.profile.use(seat));
+      const profileNote = h('p', { class: 'profile-note small muted', role: 'status' });
+      lines.set(seat, { input, profileNote, credit, remove, note, palette, choices, custom, accentNote });
       return h(
         'div',
         { class: 'player-row' },
@@ -275,6 +303,8 @@ function playerRows(o: {
         accentNote,
         h('div', { class: 'art-line' }, choose, random, remove, credit),
         note,
+        h('div', { class: 'art-line' }, saveProfile, useProfile),
+        profileNote,
       );
     }),
   );
@@ -285,6 +315,18 @@ function playerRows(o: {
     note(seat, text) {
       const line = lines.get(seat);
       if (line) line.note.textContent = text;
+    },
+    profileNote(seat, text) {
+      const line = lines.get(seat);
+      if (line) line.profileNote.textContent = text;
+    },
+    applied(seat) {
+      const line = lines.get(seat);
+      if (!line) return;
+      line.input.value = o.name(seat);
+      line.custom.removeAttribute('aria-invalid');
+      line.accentNote.textContent = '';
+      syncAccent(seat);
     },
   };
 }
@@ -434,6 +476,14 @@ export function createLife(storage: Storage | null, client: ScryfallClient, artS
       if (suggestions.get(id) === p) suggestions.delete(id);
     });
     return p.catch(() => []);
+  };
+  /** The image ids that must stay in the cache: the one being saved, every seat's, the remembered setup's and every profile's. */
+  const keepSet = (saving: string): Set<string> => {
+    const keep = new Set<string>([saving]);
+    for (const p of store.game?.players ?? []) if (p.art) keep.add(p.art.id);
+    for (const a of store.setup.arts ?? []) if (a) keep.add(a.id);
+    for (const p of store.profiles ?? []) if (p.art) keep.add(p.art.id);
+    return keep;
   };
   const awakeNote = () => {
     const n = h('p', { class: 'banner notice', role: 'status' }, awakeState === 'unsupported' || awakeState === 'denied' ? AWAKE_MSG : '');
@@ -664,10 +714,7 @@ export function createLife(storage: Storage | null, client: ScryfallClient, artS
      */
     const commitArt = async (seat: number, ref: ArtRef): Promise<string | null> => {
       rows?.note(seat, '');
-      const keep = new Set<string>([ref.id]);
-      for (const p of store.game!.players) if (p.art) keep.add(p.art.id);
-      for (const a of store.setup.arts ?? []) if (a) keep.add(a.id);
-      const saved = await artStore.save(ref, keep);
+      const saved = await artStore.save(ref, keepSet(ref.id));
       if (me !== drawId || !store.game?.players[seat]) return null;
       let session = false;
       if (saved === null) {
@@ -718,6 +765,62 @@ export function createLife(storage: Storage | null, client: ScryfallClient, artS
         rows?.note(seat, '');
       });
 
+    /** Saves a seat's name, art and accent as a new profile, or says why not. */
+    const saveProfile = (seat: number) => {
+      const list = store.profiles ?? [];
+      let p = profileFromSeat(store.game!.players[seat], newProfileId());
+      if (!p) return rows?.profileNote(seat, NEED_NAME);
+      while (list.some((q) => q.id === p!.id)) p = { ...p, id: newProfileId() };
+      const next = addProfile(list, p);
+      if (!next) return rows?.profileNote(seat, PROFILES_FULL);
+      store.profiles = next;
+      persist();
+      rows?.profileNote(seat, `Saved ${p.name} as a profile.`);
+    };
+    /**
+     * Copies a profile onto a seat, behind the same one-art-change guard as a pick. Its image is fetched again when the cache
+     * lost it; when that fails the seat still gets the name and accent (and the tile its accent colour) with a notice.
+     */
+    const useProfile = async (seat: number, profile: Profile) => {
+      const message = await exclusive(async () => {
+        rows?.profileNote(seat, '');
+        rows?.note(seat, '');
+        let art = profile.art;
+        let problem = '';
+        let session = false;
+        if (art) {
+          const saved = await artStore.save(art, keepSet(art.id));
+          if (me !== drawId || !store.game?.players[seat]) return null;
+          if (saved === null) {
+            const storageWorks = await artStore.remove(PROBE);
+            if (me !== drawId || !store.game?.players[seat]) return null;
+            if (!storageWorks && isArtUrl(art.url)) {
+              sessionOnly.add(art.id);
+              session = true;
+            } else {
+              art = undefined;
+              problem = artUnavailable(profile.name);
+            }
+          } else sessionOnly.delete(art.id);
+        }
+        clearToast();
+        const prev = wanted.get(seat);
+        store.game = applyProfile(store.game!, seat, art ? profile : { id: profile.id, name: profile.name, ...(profile.accent ? { accent: profile.accent } : {}) });
+        remember(seat, { name: profile.name, art: art ?? null, accent: profile.accent ?? null });
+        persist();
+        // Asked for again even when the seat had this very art (its saved image may have been missing).
+        if (art) wanted.delete(seat);
+        updateTile(seat);
+        if (art && prev && prev !== art.id) unuse(prev);
+        rows?.refresh(seat);
+        rows?.applied(seat);
+        rows?.profileNote(seat, problem);
+        if (session) rows?.note(seat, SESSION_ONLY);
+        return null;
+      });
+      if (message === undefined && me === drawId) rows?.profileNote(seat, STILL_SAVING);
+    };
+
     const edit = h('button', { type: 'button', class: 'button' }, 'Edit names & colors');
     edit.addEventListener('click', () => {
       const closeEdit = h('button', { type: 'button', class: 'button' }, 'Close');
@@ -757,6 +860,10 @@ export function createLife(storage: Storage | null, client: ScryfallClient, artS
           random: (i) => void randomFor(i),
           remove: removeArt,
         },
+        profile: {
+          save: saveProfile,
+          use: (i) => openProfilePicker({ host: view, profiles: store.profiles ?? [], label: store.game!.players[i].name, onPick: (p) => void useProfile(i, p) }),
+        },
       });
       const mine = rows;
       const dlg = h('dialog', { class: 'picker sheet', 'aria-labelledby': 'edit-h' }, h('h2', { id: 'edit-h' }, 'Edit players'), mine.el, h('div', { class: 'actions' }, closeEdit));
@@ -768,6 +875,110 @@ export function createLife(storage: Storage | null, client: ScryfallClient, artS
       view.append(dlg);
       dlg.showModal();
     });
+    /** Game menu → Profiles: the saved players with Rename and Delete. A delete is at once, with an undo for 8 seconds. */
+    const profilesDialog = () => {
+      let renaming: string | null = null;
+      let undoing: { profile: Profile; index: number } | null = null;
+      let timer = 0;
+      const list = h('ul', { class: 'profile-list' });
+      const empty = h('p', { class: 'muted' }, NO_SAVED);
+      const toastEl = h('div', { class: 'toast profile-toast', role: 'status' });
+      const closeBtn = h('button', { type: 'button', class: 'button' }, 'Close');
+      const dlg = h('dialog', { class: 'picker sheet profiles', 'aria-labelledby': 'profiles-h' }, h('h2', { id: 'profiles-h' }, 'Profiles'), list, empty, toastEl, h('div', { class: 'actions' }, closeBtn));
+      const dropToast = () => {
+        const lostFocus = toastEl.contains(document.activeElement);
+        window.clearTimeout(timer);
+        timer = 0;
+        undoing = null;
+        toastEl.replaceChildren();
+        if (lostFocus) closeBtn.focus();
+      };
+      const draw = (focus?: HTMLElement | null) => {
+        const profiles = store.profiles ?? [];
+        empty.hidden = profiles.length > 0;
+        let target: HTMLElement | null = null;
+        list.replaceChildren(
+          ...profiles.map((p) => {
+            const chip = h('span', { class: 'swatch-chip', 'aria-hidden': 'true', style: p.accent ? `--chip:${p.accent}` : '' });
+            if (p.id === renaming) {
+              const field = h('input', { type: 'text', maxlength: MAX_NAME, autocomplete: 'off', value: p.name, 'aria-label': `New name for ${p.name}`, 'aria-invalid': 'false' }) as HTMLInputElement;
+              const error = h('p', { class: 'field-error profile-error', role: 'alert' });
+              const save = h('button', { type: 'submit', class: 'button primary', 'aria-label': `Save name for ${p.name}` }, 'Save');
+              const cancel = h('button', { type: 'button', class: 'button', 'aria-label': `Cancel renaming ${p.name}` }, 'Cancel');
+              field.setAttribute('aria-describedby', (error.id = `profile-error-${p.id}`));
+              field.addEventListener('input', () => {
+                field.setAttribute('aria-invalid', 'false');
+                error.textContent = '';
+              });
+              const form = h('form', { class: 'profile-rename' }, chip, field, save, cancel, error);
+              form.addEventListener('submit', (e) => {
+                e.preventDefault();
+                if (field.value.trim() === '') {
+                  field.setAttribute('aria-invalid', 'true');
+                  error.textContent = 'Enter a name';
+                  return;
+                }
+                store.profiles = renameProfile(store.profiles ?? [], p.id, field.value);
+                persist();
+                renaming = null;
+                draw();
+                list.querySelector<HTMLElement>(`[data-rename="${p.id}"]`)?.focus();
+              });
+              cancel.addEventListener('click', () => {
+                renaming = null;
+                draw();
+                list.querySelector<HTMLElement>(`[data-rename="${p.id}"]`)?.focus();
+              });
+              target = field;
+              return h('li', { class: 'profile-row renaming' }, form);
+            }
+            const rename = h('button', { type: 'button', class: 'button small', 'aria-label': `Rename ${p.name}` }, 'Rename');
+            rename.dataset.rename = p.id;
+            rename.addEventListener('click', () => {
+              renaming = p.id;
+              draw();
+            });
+            const del = h('button', { type: 'button', class: 'button small danger', 'aria-label': `Delete ${p.name}` }, 'Delete');
+            del.addEventListener('click', () => {
+              const current = store.profiles ?? [];
+              const index = current.findIndex((q) => q.id === p.id);
+              if (index < 0) return;
+              store.profiles = deleteProfile(current, p.id);
+              persist();
+              dropToast();
+              undoing = { profile: p, index };
+              const undo = h('button', { type: 'button', class: 'button' }, 'Undo');
+              undo.addEventListener('click', () => {
+                const back = undoing;
+                if (!back) return;
+                dropToast();
+                const now = store.profiles ?? [];
+                if (now.length < MAX_PROFILES && !now.some((q) => q.id === back.profile.id)) {
+                  store.profiles = [...now.slice(0, back.index), back.profile, ...now.slice(back.index)];
+                  persist();
+                }
+                draw();
+                list.querySelector<HTMLElement>(`[data-rename="${back.profile.id}"]`)?.focus();
+              });
+              toastEl.replaceChildren(h('span', {}, `Deleted ${p.name}`), undo);
+              timer = window.setTimeout(dropToast, TOAST_MS);
+              draw(undo);
+            });
+            return h('li', { class: 'profile-row' }, chip, h('span', { class: 'profile-name' }, p.name), rename, del);
+          }),
+        );
+        (target ?? focus)?.focus();
+      };
+      closeBtn.addEventListener('click', () => dlg.close());
+      dlg.addEventListener('close', () => {
+        window.clearTimeout(timer);
+        dlg.remove();
+      });
+      draw();
+      view.append(dlg);
+      dlg.showModal();
+    };
+
     /** One roll at a time: the menu closes, the table lights up seat by seat, and the winner is marked and saved. */
     let rolling = false;
     const rollBtn = h('button', { type: 'button', class: 'button' }, 'Roll for first player');
@@ -880,6 +1091,8 @@ export function createLife(storage: Storage | null, client: ScryfallClient, artS
     newBtn.addEventListener('click', () => openSetupSheet(newGameDialog));
     const defaultsBtn = h('button', { type: 'button', class: 'button' }, 'Defaults');
     defaultsBtn.addEventListener('click', () => openSetupSheet(defaultsDialog));
+    const profilesBtn = h('button', { type: 'button', class: 'button' }, 'Profiles');
+    profilesBtn.addEventListener('click', profilesDialog);
     const close = h('button', { type: 'button', class: 'button' }, 'Close');
     const menu = h(
       'dialog',
@@ -887,7 +1100,7 @@ export function createLife(storage: Storage | null, client: ScryfallClient, artS
       h('h2', { id: 'game-menu-h' }, 'Game menu'),
       notice(),
       awakeNote(),
-      h('div', { class: 'menu-actions' }, undoBtn, rollBtn, newBtn, defaultsBtn, edit, reset, h('a', { class: 'button', href: '#/' }, 'Leave game'), close),
+      h('div', { class: 'menu-actions' }, undoBtn, rollBtn, newBtn, defaultsBtn, edit, profilesBtn, reset, h('a', { class: 'button', href: '#/' }, 'Leave game'), close),
     );
     close.addEventListener('click', () => menu.close());
     const open = h('button', { type: 'button', class: `table-menu${top.length ? '' : ' corner'}`, 'aria-label': 'Game menu' }, 'Menu');
@@ -916,6 +1129,15 @@ export function createLife(storage: Storage | null, client: ScryfallClient, artS
         stopAwake();
         stopAwake = null;
       }
+    },
+    profiles: () => [...(store.profiles ?? [])],
+    mergeProfiles(incoming) {
+      const merged = mergeInto(store.profiles ?? [], incoming);
+      if (merged.added > 0) {
+        store.profiles = merged.profiles;
+        persist();
+      }
+      return { added: merged.added, skipped: merged.skipped };
     },
     ensureGame() {
       if (!store.game) {
