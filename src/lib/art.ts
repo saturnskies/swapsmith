@@ -138,6 +138,30 @@ export function readable(hex: string): string | null {
   return out;
 }
 
+/** How many accent colors are offered for a seat's art. */
+const SUGGESTIONS = 6;
+
+/** Accent colors to offer for RGBA pixel bytes: the dominant colors, each made readable, without duplicates; [] when nothing is left to offer. */
+export function accentSuggestions(pixels: Uint8ClampedArray): string[] {
+  const out: string[] = [];
+  for (const c of dominantColors(pixels, SUGGESTIONS)) {
+    const hex = readable(c);
+    if (hex && !out.includes(hex)) out.push(hex);
+  }
+  return out;
+}
+
+/** A color a person typed, `#rrggbb`, `rrggbb` or `#rgb`, as a readable lowercase `#rrggbb`; `adjusted` says it had to be darkened. Null for anything else. */
+export function parseAccent(text: string): { hex: string; adjusted: boolean } | null {
+  if (typeof text !== 'string') return null;
+  const m = /^#?([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.exec(text.trim());
+  if (!m) return null;
+  const digits = m[1].length === 3 ? [...m[1]].map((d) => d + d).join('') : m[1];
+  const typed = `#${digits.toLowerCase()}`;
+  const hex = readable(typed)!;
+  return { hex, adjusted: hex !== typed };
+}
+
 export interface CacheEntry {
   id: string;
   bytes: number;
