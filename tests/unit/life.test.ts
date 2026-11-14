@@ -12,6 +12,7 @@ import {
   defaultSetup,
   emptyLife,
   gameFromDefaults,
+  isDead,
   loadLife,
   newGame,
   parseStartingLife,
@@ -427,6 +428,46 @@ describe('warnings (nothing is ever eliminated)', () => {
     let g = applyChange(three(), 0, { kind: 'poison' }, 10);
     g = applyChange(g, 0, { kind: 'poison' }, 1);
     expect(g.players[0].poison).toBe(11);
+  });
+});
+
+describe('isDead (the same three lethal sources warnings lists)', () => {
+  const partnered = () => setPartners(three(), 1, true);
+  const life = (n: number) => applyChange(three(), 0, { kind: 'life' }, n - 40);
+  it.each([
+    ['life 0', () => life(0), true, ['Life 0 or below']],
+    ['life -5', () => life(-5), true, ['Life 0 or below']],
+    ['life 1', () => life(1), false, []],
+    ['poison 10', () => applyChange(three(), 0, { kind: 'poison' }, 10), true, ['Poison 10']],
+    ['poison 9', () => applyChange(three(), 0, { kind: 'poison' }, 9), false, []],
+    ['commander 21 from slot 0', () => applyChange(three(), 0, cmdr(1), 21), true, ['Commander damage 21 from Ben']],
+    ['commander 21 from the partner slot', () => applyChange(partnered(), 0, cmdr(1, 1), 21), true, ["Commander damage 21 from Ben's partner"]],
+    ['commander 20', () => applyChange(three(), 0, cmdr(1), 20), false, []],
+    ['15 + 15 from a partner pair', () => applyChange(applyChange(partnered(), 0, cmdr(1, 0), 15), 0, cmdr(1, 1), 15), false, []],
+  ] as const)('%s: dead %s, warnings unchanged', (_name, make, dead, said) => {
+    const g = make();
+    expect(isDead(g, 0)).toBe(dead);
+    expect(warnings(g, 0)).toEqual(said);
+  });
+
+  it('is judged per seat: a dead seat does not make its neighbours dead', () => {
+    const g = life(0);
+    expect([isDead(g, 0), isDead(g, 1), isDead(g, 2)]).toEqual([true, false, false]);
+  });
+
+  it('is false for a seat that does not exist', () => {
+    const g = three();
+    expect(isDead(g, -1)).toBe(false);
+    expect(isDead(g, 3)).toBe(false);
+    expect(isDead(g, 1.5)).toBe(false);
+    expect(isDead(g, Number.NaN)).toBe(false);
+  });
+
+  it('follows undo and reset: derived from the counters, never stored', () => {
+    const g = life(0);
+    expect(isDead(undo(g), 0)).toBe(false);
+    expect(isDead(resetGame(g), 0)).toBe(false);
+    expect('dead' in g.players[0]).toBe(false);
   });
 });
 
