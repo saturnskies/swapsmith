@@ -63,7 +63,7 @@ test('Back up carries the saved profiles and leaves the store as it was', async 
   expect(file.profiles.map((p: { name: string }) => p.name)).toEqual(['Edgar', 'Breya']);
   expect(file.profiles[0].id).toMatch(/^p[0-9a-f]{8}$/);
   expect(file).toMatchObject({ app: 'swapsmith', backup: 1 });
-  expect(Object.keys(file.store).sort()).toEqual(['decks', 'owned', 'prefs', 'unownedBasics', 'version']);
+  expect(Object.keys(file.store).sort()).toEqual(['decks', 'prefs', 'version']);
   await expect(page.getByText('Backup file made with 0 decks and 2 player profiles.')).toBeVisible();
 });
 
@@ -110,6 +110,7 @@ test('restoring an old file with no profiles field leaves the saved profiles alo
 test('restoring into a full pod of 12 skips the extras and says how many', async ({ page }, testInfo) => {
   await start(page);
   await seedProfiles(page, 12);
+  await page.reload();
   const file = testInfo.outputPath('two.json');
   writeFileSync(file, BACKUP({ profiles: [{ id: 'pa0000aa', name: 'Edgar' }, { id: 'pb0000bb', name: 'Breya' }] }));
   await restore(page, file);
