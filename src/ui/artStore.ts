@@ -37,6 +37,8 @@ export interface ArtStore {
   save(ref: ArtRef, keep: ReadonlySet<string> | null): Promise<string | null>;
   /** An object URL for the saved image (the same one until `release`), or null; counts as a use. */
   url(id: string): Promise<string | null>;
+  /** The saved image's bytes (for sampling its colors), or null; counts as a use. */
+  blob(id: string): Promise<Blob | null>;
   /** Revokes the object URL `url(id)` gave. Call it when the tile showing it is redrawn or gone. */
   release(id: string): void;
   has(id: string): Promise<boolean>;
@@ -262,6 +264,14 @@ export function createArtStore(opts: ArtStoreOptions = {}): ArtStore {
     },
 
     release,
+
+    async blob(id) {
+      try {
+        return (await touch(id))?.blob ?? null;
+      } catch {
+        return null;
+      }
+    },
 
     async has(id) {
       try {
