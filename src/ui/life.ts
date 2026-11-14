@@ -569,15 +569,17 @@ export function createLife(storage: Storage | null, client: ScryfallClient, artS
       });
       if (message && me === drawId) rows?.note(seat, message);
     };
-    const removeArt = (seat: number) => {
-      clearToast();
-      store.game = setArt(store.game!, seat, null);
-      remember(seat, { art: null });
-      persist();
-      updateTile(seat);
-      rows?.refresh(seat);
-      rows?.note(seat, '');
-    };
+    // Behind the same guard as a pick or a random: removing while one is still landing would let it put the art back.
+    const removeArt = (seat: number) =>
+      void exclusive(async () => {
+        clearToast();
+        store.game = setArt(store.game!, seat, null);
+        remember(seat, { art: null });
+        persist();
+        updateTile(seat);
+        rows?.refresh(seat);
+        rows?.note(seat, '');
+      });
 
     const edit = h('button', { type: 'button', class: 'button' }, 'Edit names & colors');
     edit.addEventListener('click', () => {
