@@ -43,6 +43,7 @@ Status: **current** = in force or in progress; **draft** = proposed, not approve
 - [2026-11-06-swap-from-card.md](superpowers/plans/2026-11-06-swap-from-card.md) — done, 2026-11-06 — Plan for swap from a card — tap a deck card, see similar cards from decks with the same commander, popularity and comparison side by side, swap in one tap; five test-gated slices
 - [2026-11-13-life-counter-slice-1.md](superpowers/plans/2026-11-13-life-counter-slice-1.md) — done, 2026-11-13 — Plan for Life Counter slice 1 — the tab opens straight into a saved default 2-player 40-life game, New game and Defaults sheets replace the setup screen, reset needs no confirm (with an undo toast), face-to-face 2-player layout checked; four test-gated tasks
 - [2026-11-13-life-counter-slice-2.md](superpowers/plans/2026-11-13-life-counter-slice-2.md) — done, 2026-11-13 — Plan for Life Counter slice 2 — card art on any seat (search by name or artist with colour, type and legendary filters, random, cached offline), full-bleed art tiles that stay readable, and accent colours suggested from the art plus a custom picker; four test-gated tasks
+- [2026-11-14-life-counter-slice-3.md](superpowers/plans/2026-11-14-life-counter-slice-3.md) — draft, 2026-11-14 — Plan for Life Counter slice 3 — saved pod profiles (name, card art, accent colour) picked per seat, kept in the Life Counter store and carried in deck backup and restore; three test-gated tasks
 
 ## docs/superpowers/specs/
 
