@@ -15,6 +15,8 @@ export const MAX_IMAGE_BYTES = 600 * 1024;
 export const ART_HOST = 'cards.scryfall.io';
 
 const STORE = 'images';
+/** A use of an image is written to its row at most this often. */
+const BUMP_MS = 60 * 1000;
 
 interface Row {
   id: string;
@@ -77,9 +79,20 @@ export function createArtStore(opts: ArtStoreOptions = {}): ArtStore {
       if (!factory) return reject(new Error('IndexedDB is not available'));
       const req = factory.open(dbName, 1);
       req.onupgradeneeded = () => req.result.createObjectStore(STORE, { keyPath: 'id' });
-      req.onsuccess = () => resolve(req.result);
+      req.onsuccess = () => {
+        const conn = req.result;
+        // Let go of the connection when another tab upgrades the database, and forget it when the browser drops it.
+        conn.onversionchange = () => {
+          conn.close();
+          if (dbp === attempt) dbp = undefined;
+        };
+        conn.onclose = () => {
+          if (dbp === attempt) dbp = undefined;
+        };
+        resolve(conn);
+      };
       req.onerror = () => reject(req.error);
-      req.onblocked = () => reject(new Error('IndexedDB is blocked'));
+      // `blocked` only says another connection is still open; the open goes on once it closes, so it is not a failure.
     });
     dbp = attempt;
     // A failed open is tried again on the next call rather than disabling the store until reload.
@@ -89,34 +102,57 @@ export function createArtStore(opts: ArtStoreOptions = {}): ArtStore {
     return attempt;
   };
 
-  /** Runs `fn` in one transaction and answers with its result once the transaction has committed. */
-  async function run<T>(mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRequest<T>): Promise<T> {
-    const t = (await db()).transaction(STORE, mode);
+  /** Opens a transaction on the current connection; a connection that died unannounced is replaced once. */
+  async function begin(mode: IDBTransactionMode): Promise<IDBTransaction> {
+    const conn = await db();
+    try {
+      return conn.transaction(STORE, mode);
+    } catch (e) {
+      if (!(e instanceof DOMException) || e.name !== 'InvalidStateError') throw e;
+      dbp = undefined;
+      return (await db()).transaction(STORE, mode);
+    }
+  }
+
+  /** Runs `fn` in one transaction and answers with what it passed to `set`, once the transaction has committed. */
+  async function transact<T>(mode: IDBTransactionMode, fn: (s: IDBObjectStore, set: (v: T) => void) => void): Promise<T> {
+    const t = await begin(mode);
     return new Promise<T>((resolve, reject) => {
       let result: T;
       t.oncomplete = () => resolve(result);
       t.onerror = () => reject(t.error);
       t.onabort = () => reject(t.error ?? new Error('IndexedDB transaction aborted'));
-      const req = fn(t.objectStore(STORE));
-      req.onsuccess = () => (result = req.result);
+      fn(t.objectStore(STORE), (v) => (result = v));
     });
   }
 
-  /** Marks the row as used now, in the same transaction that reads it, so a row deleted meanwhile is not brought back. */
+  const run = <T>(mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRequest<T>) =>
+    transact<T>(mode, (s, set) => {
+      const req = fn(s);
+      req.onsuccess = () => set(req.result);
+    });
+
+  /** When each image's row was last rewritten with a new lastUsed, so a busy screen doesn't rewrite a 600 KB blob per redraw. */
+  const stamped = new Map<string, number>();
+
+  /**
+   * Reads the row and, at most once a minute per image, marks it used now. The mark is written in the same transaction
+   * that reads the row, so a row deleted meanwhile is not brought back. Recency is therefore kept to the minute.
+   */
   async function touch(id: string): Promise<Row | undefined> {
-    const t = (await db()).transaction(STORE, 'readwrite');
-    return new Promise<Row | undefined>((resolve, reject) => {
-      let row: Row | undefined;
-      t.oncomplete = () => resolve(row);
-      t.onerror = () => reject(t.error);
-      t.onabort = () => reject(t.error ?? new Error('IndexedDB transaction aborted'));
-      const store = t.objectStore(STORE);
+    const at = now();
+    const last = stamped.get(id);
+    const due = last === undefined || at - last >= BUMP_MS;
+    const row = await transact<Row | undefined>(due ? 'readwrite' : 'readonly', (store, set) => {
       const req = store.get(id);
       req.onsuccess = () => {
-        row = req.result;
-        if (row) store.put({ ...row, lastUsed: now() });
+        const found: Row | undefined = req.result;
+        set(found);
+        if (found && due) store.put({ ...found, lastUsed: at });
       };
     });
+    if (row && due) stamped.set(id, at);
+    return row;
   }
 
   const getRow = (id: string) => run<Row | undefined>('readonly', (s) => s.get(id));
@@ -160,6 +196,7 @@ export function createArtStore(opts: ArtStoreOptions = {}): ArtStore {
     const entries = (await allRows()).map((r) => ({ id: r.id, bytes: r.bytes, lastUsed: r.lastUsed }));
     for (const id of planEviction(entries, keep, caps).remove) {
       await deleteRow(id);
+      stamped.delete(id);
       release(id);
     }
   }
@@ -170,7 +207,9 @@ export function createArtStore(opts: ArtStoreOptions = {}): ArtStore {
       const blob = await download(ref.url);
       if (!blob) return null;
       try {
-        await putRow({ id: ref.id, blob, bytes: blob.size, lastUsed: now() });
+        const lastUsed = now();
+        await putRow({ id: ref.id, blob, bytes: blob.size, lastUsed });
+        stamped.set(ref.id, lastUsed);
       } catch {
         // Full or blocked: the transaction is rolled back as a whole, so no half-written row stays and the old images are intact.
         return null;
@@ -222,6 +261,7 @@ export function createArtStore(opts: ArtStoreOptions = {}): ArtStore {
     async remove(id) {
       try {
         await deleteRow(id);
+        stamped.delete(id);
         release(id);
         return true;
       } catch {
