@@ -86,6 +86,23 @@ Built on the [slice 3 plan](../plans/2026-11-14-life-counter-slice-3.md). The Pr
   - Renaming in Profiles can produce a default-looking name ("Player 2"), which Save as profile would refuse.
   - If Edit players is closed while a profile's image is being fetched, the seat gets name and accent but the "art unavailable" notice has nowhere to show.
 
+## Slice 4 as built (2026-11-14)
+
+Built on the [slice 4 plan](../plans/2026-11-14-life-counter-slice-4.md). The Death decisions above are made and shipped; the plan's choices where the spec was silent are below.
+
+- **Death is derived, never stored.** `isDead(game, seat)` in `src/lib/life.ts` is life <= 0, poison >= 10, or 21 from one commander (a partner slot counts); `warnings` reads the same list, wording unchanged. `swapsmith:life` stays at version 1, so no save or restore needs a migration. Nobody is eliminated: counters keep working on a dead seat.
+- **Every tile carries `data-dead="true|false"`.** `data-dying="true"` is set only for the burst after a change from alive to dead, and goes on the skull's `animationend` or after 1300 ms. A tile's first draw has no earlier state, so a load, reload or tab switch shows a dead seat already settled, with no animation and no buzz.
+- **The look.** `src/ui/deathArt.ts` builds the splatter and the skull as inline SVG with `createElementNS` (no `innerHTML`, no image, no font, no network), `aria-hidden` and `pointer-events: none`, in `.tile-death` between the art layer and the life number. The splatter is one fixed shape turned and scaled per seat (no randomness). Skull and splatter fills stay at or below luminance .18 so the white life number and name keep 4.5:1. The art layer gets `grayscale(1) brightness(.55)` over 300 ms; a tile with no art greys its accent the same way (its `.tile-art` is now `opacity: 0` in the layout instead of `display: none`). The top row's overlay is turned 180 degrees with its tile, so the skull faces that player.
+- **Reduced motion:** no burst, no `data-dying`, no buzz, no transition; the settled skull and grey art show at once.
+- **Haptic buzz:** `buzz(ms = 80)` in `src/ui/native.ts` calls `navigator.vibrate` (Android Chrome and the app's WebView; iOS has none). It does nothing under reduced motion, when `vibrate` is missing, or when it throws. It is called from the alive-to-dead branch only, so reload, healing and counter changes on a dead seat never buzz. **Capacitor Haptics was not added** (plan decision: only if already a dependency; it was not, and `navigator.vibrate` works in the WebView with no new dependency or Android change).
+- **Reset-toast Undo replays the burst, and buzzes.** Restoring a game that had dead seats is a change from alive to dead, like undoing a heal, so the burst and the buzz play again. Accepted, and pinned by an e2e test so it is a decision, not an accident.
+- **Parked minors, worth knowing:**
+  - The dead rule for `.tile-art` and the no-art `opacity: 0` rule tie in specificity; the dead one wins by source order, and a comment in `src/style.css` says so.
+  - The art layer now fades over 300 ms when art is added or removed (it appeared at once before); harmless, and instant under reduced motion.
+  - Each burst adds a `{ once: true }` `animationend` listener; after a heal mid-burst the stale one stays until the next skull animation ends. It only calls `endDying`, and the count is bounded.
+  - The contrast test covers the life number and name, not the Counters pill or badges over the skull; in every tile shape the skull is centred (about 56% of the box) and the pill sits at the top edge, so they do not overlap. Recheck if the skull is enlarged.
+  - The six-seat test checks skull bounds only; splatter bounds are checked on the two-seat tile (it fits a circle inside the box, so turning never clips).
+
 ## Open items for the plan
 
 - Saved-store version bump and sanitizer changes (`swapsmith:life`); profiles key and backup file shape (must not touch `swapsmith:v1`, see Android signing gotchas in CLAUDE.md).
