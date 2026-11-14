@@ -248,6 +248,16 @@ describe('artStore.url, release, has, remove', () => {
     expect(await store.has('nope')).toBe(false);
   });
 
+  it('blob gives the saved bytes without making an object URL, and null for an image never saved', async () => {
+    const { store, urls } = setup(image(500));
+    await store.save(ref('a'), new Set());
+    const blob = await store.blob('a');
+    expect(blob?.size).toBe(500);
+    expect(blob?.type).toBe('image/jpeg');
+    expect(urls.size).toBe(0);
+    expect(await store.blob('nope')).toBeNull();
+  });
+
   it('remove deletes the row and revokes its object URL; removing nothing is fine', async () => {
     const { store, revoked } = setup();
     await store.save(ref('a'), new Set());
@@ -273,6 +283,7 @@ describe('artStore with storage that is missing, throwing or full', () => {
     const { store, fetches } = setup(image(), { idb: null });
     expect(await store.save(ref('a'), new Set())).toBeNull();
     expect(await store.url('a')).toBeNull();
+    expect(await store.blob('a')).toBeNull();
     expect(await store.has('a')).toBe(false);
     expect(await store.remove('a')).toBe(false);
     expect(() => store.release('a')).not.toThrow();
