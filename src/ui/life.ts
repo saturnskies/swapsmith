@@ -1,4 +1,5 @@
-import { SCRIM_ALPHA, type ArtRef } from '../lib/art';
+import { SCRIM_ALPHA, accentSuggestions, parseAccent, type ArtRef } from '../lib/art';
+import { samplePixels } from './accent';
 import { keepAwake, type AwakeDeps, type AwakeState } from '../lib/awake';
 import {
   CMDR_LETHAL,
@@ -17,6 +18,7 @@ import {
   resetGame,
   saveLife,
   seating,
+  setAccent,
   setArt,
   setColor,
   setFirst,
@@ -110,6 +112,15 @@ interface ArtActions {
   remove(seat: number): void;
 }
 
+/** What the player rows need to run a seat's accent: the current one, the suggestions for its art, and a way to set or clear it. */
+interface AccentActions {
+  current(seat: number): string | undefined;
+  /** The colors to offer for an art id; never rejects, and answers [] when there are none. */
+  suggest(artId: string): Promise<string[]>;
+  /** Sets the accent (a readable `#rrggbb`), or clears it with null. */
+  set(seat: number, hex: string | null): void;
+}
+
 /** The seat rows' handles: redraw one seat's art line, or say something under it. */
 interface PlayerRows {
   el: HTMLElement;
@@ -119,15 +130,91 @@ interface PlayerRows {
 
 const DICE = ['M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z', 'M8.5 8.5h.01M15.5 8.5h.01M12 12h.01M8.5 15.5h.01M15.5 15.5h.01'];
 
-/** One row per seat: a name field, the eight color swatches and the art line. The in-game edit dialog uses it. */
-function playerRows(o: { count: number; name(seat: number): string; color(seat: number): number; onName(seat: number, value: string): void; onColor(seat: number, color: number): void; art: ArtActions }): PlayerRows {
-  const lines = new Map<number, { credit: HTMLElement; remove: HTMLElement; note: HTMLElement }>();
+const ADJUSTED = 'Adjusted so text stays readable';
+const NOT_A_COLOR = 'Enter a color like #b3261e';
+let rowIds = 0;
+
+/**
+ * One row per seat: a name field, the eight palette swatches, the colors suggested from the seat's art, a custom color
+ * field and the art line. The in-game edit dialog uses it. Suggestions are only offered here; a tap applies one.
+ */
+function playerRows(o: {
+  count: number;
+  name(seat: number): string;
+  color(seat: number): number;
+  onName(seat: number, value: string): void;
+  onColor(seat: number, color: number): void;
+  art: ArtActions;
+  accent: AccentActions;
+}): PlayerRows {
+  interface Line {
+    credit: HTMLElement;
+    remove: HTMLElement;
+    note: HTMLElement;
+    palette: HTMLElement[];
+    choices: HTMLElement;
+    custom: HTMLInputElement;
+    accentNote: HTMLElement;
+    /** The art id the offered colors belong to (undefined: none offered). */
+    offered?: string;
+  }
+  const lines = new Map<number, Line>();
+
+  /** Marks which palette swatch or suggestion is the seat's color, and shows an accent in the custom field. */
+  const syncAccent = (seat: number) => {
+    const line = lines.get(seat);
+    if (!line) return;
+    const accent = o.accent.current(seat);
+    line.palette.forEach((b, i) => b.setAttribute('aria-pressed', String(!accent && i === o.color(seat))));
+    for (const b of line.choices.querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.hex === accent));
+    line.custom.value = accent ?? '';
+  };
+  /** Sets the accent and shows what was done: the field shows the (possibly darkened) value, and the note says if it was darkened. */
+  const applyAccent = (seat: number, text: string) => {
+    const line = lines.get(seat)!;
+    const parsed = parseAccent(text);
+    if (!parsed) return false;
+    line.custom.removeAttribute('aria-invalid');
+    line.accentNote.textContent = parsed.adjusted ? ADJUSTED : '';
+    o.accent.set(seat, parsed.hex);
+    syncAccent(seat);
+    return true;
+  };
+  const offer = (seat: number, list: string[]) => {
+    const line = lines.get(seat)!;
+    line.choices.replaceChildren(
+      ...list.map((hex) => {
+        const b = h('button', { type: 'button', class: 'swatch accent-choice', 'aria-label': `Accent: ${hex}`, 'aria-pressed': 'false', style: `--swatch:${hex}` });
+        b.dataset.hex = hex;
+        b.addEventListener('click', () => {
+          line.custom.removeAttribute('aria-invalid');
+          line.accentNote.textContent = '';
+          o.accent.set(seat, hex);
+          syncAccent(seat);
+        });
+        return b;
+      }),
+    );
+    line.choices.hidden = list.length === 0;
+    syncAccent(seat);
+  };
   const refresh = (seat: number) => {
     const line = lines.get(seat);
     const art = o.art.current(seat);
     if (!line) return;
     line.credit.textContent = art ? `${art.name} · ${art.artist}` : 'No art';
     line.remove.hidden = !art;
+    syncAccent(seat);
+    if (line.offered === art?.id) return;
+    // Another art (or none): the old suggestions go now, the new ones come when sampled, unless the seat has changed again.
+    const id = art?.id;
+    line.offered = id;
+    offer(seat, []);
+    if (id) {
+      void o.accent.suggest(id).then((list) => {
+        if (line.offered === id) offer(seat, list);
+      });
+    }
   };
   const el = h(
     'div',
@@ -135,11 +222,13 @@ function playerRows(o: { count: number; name(seat: number): string; color(seat: 
     ...Array.from({ length: o.count }, (_, seat) => {
       const input = h('input', { type: 'text', maxlength: MAX_NAME, autocomplete: 'off', placeholder: `Player ${seat + 1}`, value: o.name(seat), 'aria-label': `Name for player ${seat + 1}` });
       input.addEventListener('input', () => o.onName(seat, input.value));
-      const buttons = PALETTE.map((c, i) => {
-        const b = h('button', { type: 'button', class: 'swatch', 'aria-label': c.name, 'aria-pressed': String(i === o.color(seat)), style: `--swatch:${c.hex}` });
+      const palette = PALETTE.map((c, i) => {
+        const b = h('button', { type: 'button', class: 'swatch', 'aria-label': c.name, 'aria-pressed': 'false', style: `--swatch:${c.hex}` });
         b.addEventListener('click', () => {
+          lines.get(seat)!.custom.removeAttribute('aria-invalid');
+          lines.get(seat)!.accentNote.textContent = '';
           o.onColor(seat, i);
-          buttons.forEach((x, j) => x.setAttribute('aria-pressed', String(j === i)));
+          syncAccent(seat);
         });
         return b;
       });
@@ -151,13 +240,39 @@ function playerRows(o: { count: number; name(seat: number): string; color(seat: 
       remove.addEventListener('click', () => o.art.remove(seat));
       const credit = h('span', { class: 'art-credit small muted' });
       const note = h('p', { class: 'art-note small muted', role: 'status' });
-      lines.set(seat, { credit, remove, note });
+      const choices = h('div', { class: 'swatches accent-swatches', role: 'group', 'aria-label': `Suggested accents for player ${seat + 1}`, hidden: true });
+      const accentNote = h('p', { class: 'accent-note small muted', role: 'status', id: `accent-note-${++rowIds}` });
+      const custom = h('input', { type: 'text', class: 'accent-custom', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', maxlength: 12, placeholder: 'Custom #rrggbb', 'aria-label': `Custom accent for player ${seat + 1}`, 'aria-describedby': accentNote.id }) as HTMLInputElement;
+      // A whole #rrggbb applies as it is typed; anything else waits for the field to be left or Enter, so a half-typed color is never an error.
+      custom.addEventListener('input', () => {
+        if (/^#?[0-9a-fA-F]{6}$/.test(custom.value.trim())) applyAccent(seat, custom.value);
+      });
+      custom.addEventListener('change', () => {
+        const text = custom.value.trim();
+        if (text === '') {
+          custom.removeAttribute('aria-invalid');
+          accentNote.textContent = '';
+          syncAccent(seat);
+          return;
+        }
+        // Already applied by the input handler (and possibly darkened): leave its message alone.
+        const typed = parseAccent(text);
+        if (typed && typed.hex === o.accent.current(seat)) return void syncAccent(seat);
+        if (!applyAccent(seat, text)) {
+          custom.setAttribute('aria-invalid', 'true');
+          accentNote.textContent = NOT_A_COLOR;
+        }
+      });
+      lines.set(seat, { credit, remove, note, palette, choices, custom, accentNote });
       return h(
         'div',
         { class: 'player-row' },
         h('span', { class: 'seat', 'aria-hidden': 'true' }, String(seat + 1)),
         input,
-        h('div', { class: 'swatches', role: 'group', 'aria-label': `Color for player ${seat + 1}` }, ...buttons),
+        h('div', { class: 'swatches', role: 'group', 'aria-label': `Color for player ${seat + 1}` }, ...palette),
+        choices,
+        h('div', { class: 'accent-line' }, custom),
+        accentNote,
         h('div', { class: 'art-line' }, choose, random, remove, credit),
         note,
       );
@@ -286,7 +401,7 @@ export function createLife(storage: Storage | null, client: ScryfallClient, artS
   };
 
   /** Remembers a seat's name or color for the next game. */
-  const remember = (seat: number, patch: { name?: string; color?: number; art?: ArtRef | null }) => {
+  const remember = (seat: number, patch: { name?: string; color?: number; art?: ArtRef | null; accent?: string | null }) => {
     const names = padded(store.setup.names, '');
     const colors = padded(store.setup.colors, -1);
     if (patch.name !== undefined) names[seat] = patch.name.slice(0, MAX_NAME);
@@ -297,6 +412,28 @@ export function createLife(storage: Storage | null, client: ScryfallClient, artS
       arts[seat] = patch.art;
       store.setup = { ...store.setup, arts };
     }
+    if (patch.accent !== undefined) {
+      const accents = padded<string | null>(store.setup.accents ?? [], null);
+      accents[seat] = patch.accent;
+      store.setup = { ...store.setup, accents };
+    }
+  };
+  /** Suggested accents by art id, sampled once and kept in memory. A failed or missing sample is not kept, so it is tried again. */
+  const suggestions = new Map<string, Promise<string[]>>();
+  const suggestFor = (id: string): Promise<string[]> => {
+    const known = suggestions.get(id);
+    if (known) return known;
+    const p = (async () => {
+      const blob = await artStore.blob(id);
+      const pixels = blob ? await samplePixels(blob) : null;
+      if (!pixels) throw new Error('no pixels');
+      return accentSuggestions(pixels);
+    })();
+    suggestions.set(id, p);
+    p.catch(() => {
+      if (suggestions.get(id) === p) suggestions.delete(id);
+    });
+    return p.catch(() => []);
   };
   const awakeNote = () => {
     const n = h('p', { class: 'banner notice', role: 'status' }, awakeState === 'unsupported' || awakeState === 'denied' ? AWAKE_MSG : '');
@@ -342,7 +479,7 @@ export function createLife(storage: Storage | null, client: ScryfallClient, artS
       t.counters.setAttribute('aria-label', `${p.name}: poison and commander damage`);
       t.minus.setAttribute('aria-label', `${p.name}: lose 1 life`);
       t.plus.setAttribute('aria-label', `${p.name}: gain 1 life`);
-      t.el.style.setProperty('--tile', PALETTE[p.color].hex);
+      t.el.style.setProperty('--tile', p.accent ?? PALETTE[p.color].hex);
       t.el.dataset.first = String(g.first === seat);
       const worst = Math.max(0, ...Object.values(p.cmdr));
       t.badges.replaceChildren(...[g.first === seat ? 'Goes first' : null, p.poison > 0 ? `Poison ${p.poison}` : null, worst > 0 ? `Commander ${worst}` : null].filter((x): x is string => !!x).map((x) => h('span', { class: 'badge' }, x)));
@@ -408,7 +545,7 @@ export function createLife(storage: Storage | null, client: ScryfallClient, artS
       const artEl = h('div', { class: 'tile-art', 'aria-hidden': 'true' });
       const el = h(
         'div',
-        { class: 'tile', 'data-player': seat, 'data-rotate': flipped ? '180' : '0', 'data-warn': 'false', 'data-first': 'false', style: `--tile:${PALETTE[p.color].hex}` },
+        { class: 'tile', 'data-player': seat, 'data-rotate': flipped ? '180' : '0', 'data-warn': 'false', 'data-first': 'false', style: `--tile:${p.accent ?? PALETTE[p.color].hex}` },
         artEl,
         h(
           'div',
@@ -596,11 +733,23 @@ export function createLife(storage: Storage | null, client: ScryfallClient, artS
           persist();
         },
         onColor: (i, c) => {
+          // A palette color replaces any accent: the accent is what the seat showed instead of the palette.
           clearToast();
-          store.game = setColor(store.game!, i, c);
-          remember(i, { color: c });
+          store.game = setAccent(setColor(store.game!, i, c), i, null);
+          remember(i, { color: c, accent: null });
           updateAll();
           persist();
+        },
+        accent: {
+          current: (i) => store.game!.players[i].accent,
+          suggest: suggestFor,
+          set: (i, hex) => {
+            clearToast();
+            store.game = setAccent(store.game!, i, hex);
+            remember(i, { accent: hex });
+            updateAll();
+            persist();
+          },
         },
         art: {
           current: (i) => store.game!.players[i].art,
