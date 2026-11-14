@@ -1,3 +1,4 @@
+import { SCRIM_ALPHA, type ArtRef } from '../lib/art';
 import { keepAwake, type AwakeDeps, type AwakeState } from '../lib/awake';
 import {
   CMDR_LETHAL,
@@ -16,6 +17,7 @@ import {
   resetGame,
   saveLife,
   seating,
+  setArt,
   setColor,
   setFirst,
   setName,
@@ -26,8 +28,12 @@ import {
   type Game,
   type Target,
 } from '../lib/life';
+import { randomArt } from '../scryfall/art';
+import type { ScryfallClient } from '../scryfall/client';
+import { openArtPicker } from './artPicker';
+import { createArtStore, isArtUrl, type ArtStore } from './artStore';
 import { segmented } from './controls';
-import { h } from './dom';
+import { h, icon } from './dom';
 
 /** A press this long (ms) counts as a hold: ±10 instead of ±1. */
 const HOLD_MS = 500;
@@ -39,6 +45,11 @@ const AWAKE_MSG = 'Your screen may turn off during the game.';
 const ROLL_STEP_MS = 100;
 /** The "Life totals reset" toast, with its Undo, stays this long (ms). */
 const TOAST_MS = 8000;
+const SAVE_FAILED = "Couldn't save that image. Try again.";
+const RANDOM_FAILED = "Couldn't find art, try again";
+const SESSION_ONLY = "This art won't be kept after you close the app: your browser is blocking storage.";
+/** An id nothing is saved under: asking the art store to delete it says whether storage answers at all. */
+const PROBE = '__probe__';
 
 export interface Life {
   hasGame(): boolean;
@@ -91,9 +102,34 @@ function holdButton(o: { text: string; aria: string; delta: 1 | -1; cls: string;
 
 const padded = <T,>(items: T[], blank: T): T[] => Array.from({ length: MAX_PLAYERS }, (_, i) => items[i] ?? blank);
 
-/** One row per seat: a name field and the eight color swatches. The in-game edit dialog uses it. */
-function playerRows(o: { count: number; name(seat: number): string; color(seat: number): number; onName(seat: number, value: string): void; onColor(seat: number, color: number): void }): HTMLElement {
-  return h(
+/** What the player rows need to run a seat's art: its current art and the three things a person can do with it. */
+interface ArtActions {
+  current(seat: number): ArtRef | undefined;
+  choose(seat: number): void;
+  random(seat: number): void;
+  remove(seat: number): void;
+}
+
+/** The seat rows' handles: redraw one seat's art line, or say something under it. */
+interface PlayerRows {
+  el: HTMLElement;
+  refresh(seat: number): void;
+  note(seat: number, text: string): void;
+}
+
+const DICE = ['M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z', 'M8.5 8.5h.01M15.5 8.5h.01M12 12h.01M8.5 15.5h.01M15.5 15.5h.01'];
+
+/** One row per seat: a name field, the eight color swatches and the art line. The in-game edit dialog uses it. */
+function playerRows(o: { count: number; name(seat: number): string; color(seat: number): number; onName(seat: number, value: string): void; onColor(seat: number, color: number): void; art: ArtActions }): PlayerRows {
+  const lines = new Map<number, { credit: HTMLElement; remove: HTMLElement; note: HTMLElement }>();
+  const refresh = (seat: number) => {
+    const line = lines.get(seat);
+    const art = o.art.current(seat);
+    if (!line) return;
+    line.credit.textContent = art ? `${art.name} · ${art.artist}` : 'No art';
+    line.remove.hidden = !art;
+  };
+  const el = h(
     'div',
     { class: 'player-rows' },
     ...Array.from({ length: o.count }, (_, seat) => {
@@ -107,9 +143,35 @@ function playerRows(o: { count: number; name(seat: number): string; color(seat: 
         });
         return b;
       });
-      return h('div', { class: 'player-row' }, h('span', { class: 'seat', 'aria-hidden': 'true' }, String(seat + 1)), input, h('div', { class: 'swatches', role: 'group', 'aria-label': `Color for player ${seat + 1}` }, ...buttons));
+      const choose = h('button', { type: 'button', class: 'button small', 'aria-label': `Choose art for player ${seat + 1}` }, 'Art');
+      choose.addEventListener('click', () => o.art.choose(seat));
+      const random = h('button', { type: 'button', class: 'button small', 'aria-label': `Random art for player ${seat + 1}` }, icon(...DICE), 'Random');
+      random.addEventListener('click', () => o.art.random(seat));
+      const remove = h('button', { type: 'button', class: 'button small', 'aria-label': `Remove art for player ${seat + 1}`, hidden: true }, 'Remove art');
+      remove.addEventListener('click', () => o.art.remove(seat));
+      const credit = h('span', { class: 'art-credit small muted' });
+      const note = h('p', { class: 'art-note small muted', role: 'status' });
+      lines.set(seat, { credit, remove, note });
+      return h(
+        'div',
+        { class: 'player-row' },
+        h('span', { class: 'seat', 'aria-hidden': 'true' }, String(seat + 1)),
+        input,
+        h('div', { class: 'swatches', role: 'group', 'aria-label': `Color for player ${seat + 1}` }, ...buttons),
+        h('div', { class: 'art-line' }, choose, random, remove, credit),
+        note,
+      );
     }),
   );
+  for (let seat = 0; seat < o.count; seat += 1) refresh(seat);
+  return {
+    el,
+    refresh,
+    note(seat, text) {
+      const line = lines.get(seat);
+      if (line) line.note.textContent = text;
+    },
+  };
 }
 
 /** A modal question with two buttons; it removes itself when closed. */
@@ -187,7 +249,7 @@ function setupForm(initial: Defaults, onChange: (value: Defaults | null) => void
 }
 
 /** The Life Counter: the full-screen game at `#/life/game` (its only screen), saved under its own key after every change. */
-export function createLife(storage: Storage | null): Life {
+export function createLife(storage: Storage | null, client: ScryfallClient, artStore: ArtStore = createArtStore()): Life {
   const loaded = loadLife(storage);
   const store = loaded.store;
   /** A newer version's save sits in storage: leave it alone until a new game starts. */
@@ -200,6 +262,17 @@ export function createLife(storage: Storage | null): Life {
   let awakeState: AwakeState | null = null;
   let stopAwake: (() => void) | null = null;
   let awakeNotes: HTMLElement[] = [];
+  /** The art id each seat's tile is showing or loading (the object URL of a saved image is shared by every seat with that id). */
+  const wanted = new Map<number, string>();
+  /** Counts art loads started, across draws: a load for an older one is dropped. */
+  let artSeq = 0;
+  const artRuns = new Map<number, number>();
+  /** Art whose image could not be saved (storage blocked): shown from Scryfall's image host until the app closes. */
+  const sessionOnly = new Set<string>();
+  /** Lets go of an image's object URL unless some seat still shows or is loading it. */
+  const unuse = (id: string) => {
+    if (![...wanted.values()].includes(id)) artStore.release(id);
+  };
 
   const notice = () => {
     const n = h('p', { class: 'banner notice', role: 'status' }, saved ? '' : UNSAVED);
@@ -213,12 +286,17 @@ export function createLife(storage: Storage | null): Life {
   };
 
   /** Remembers a seat's name or color for the next game. */
-  const remember = (seat: number, patch: { name?: string; color?: number }) => {
+  const remember = (seat: number, patch: { name?: string; color?: number; art?: ArtRef | null }) => {
     const names = padded(store.setup.names, '');
     const colors = padded(store.setup.colors, -1);
     if (patch.name !== undefined) names[seat] = patch.name.slice(0, MAX_NAME);
     if (patch.color !== undefined) colors[seat] = patch.color;
     store.setup = { ...store.setup, names, colors };
+    if (patch.art !== undefined) {
+      const arts = padded<ArtRef | null>(store.setup.arts ?? [], null);
+      arts[seat] = patch.art;
+      store.setup = { ...store.setup, arts };
+    }
   };
   const awakeNote = () => {
     const n = h('p', { class: 'banner notice', role: 'status' }, awakeState === 'unsupported' || awakeState === 'denied' ? AWAKE_MSG : '');
@@ -228,10 +306,13 @@ export function createLife(storage: Storage | null): Life {
 
   function drawGame(view: HTMLElement) {
     const me = ++drawId;
+    // The tiles of the draw before are gone: let go of their pictures; the new tiles ask again.
+    for (const id of new Set(wanted.values())) artStore.release(id);
+    wanted.clear();
     notices = [];
     const seats = store.game!.players.map((_, i) => i);
     awakeNotes = [];
-    const parts = new Map<number, { life: HTMLElement; badges: HTMLElement; warn: HTMLElement; el: HTMLElement; name: HTMLElement; counters: HTMLElement; minus: HTMLElement; plus: HTMLElement }>();
+    const parts = new Map<number, { art: HTMLElement; life: HTMLElement; badges: HTMLElement; warn: HTMLElement; el: HTMLElement; name: HTMLElement; counters: HTMLElement; minus: HTMLElement; plus: HTMLElement }>();
 
     /**
      * The reset toast: a copy of the game from before the reset, kept in memory only, and the slot that offers it back. Any
@@ -268,6 +349,38 @@ export function createLife(storage: Storage | null): Life {
       const why = warnings(g, seat);
       t.warn.textContent = why.join(' · ');
       t.el.dataset.warn = String(why.length > 0);
+      syncArt(seat);
+    };
+
+    /**
+     * Shows the seat's art on its tile: the saved image, else nothing (the color stays). A load for art the seat no longer
+     * has, or for a draw that is gone, is dropped. Called on every tile redraw; it only acts when the seat's art changed.
+     */
+    const syncArt = (seat: number) => {
+      const want = store.game!.players[seat].art;
+      if (wanted.get(seat) === want?.id) return;
+      const t = parts.get(seat)!;
+      const prev = wanted.get(seat);
+      t.el.removeAttribute('data-art');
+      t.el.style.removeProperty('--art');
+      t.el.style.removeProperty('--scrim');
+      if (want) wanted.set(seat, want.id);
+      else wanted.delete(seat);
+      if (prev) unuse(prev);
+      if (!want) return;
+      const run = ++artSeq;
+      artRuns.set(seat, run);
+      void (async () => {
+        const url = sessionOnly.has(want.id) && isArtUrl(want.url) ? new URL(want.url).href : await artStore.url(want.id);
+        const stale = me !== drawId || artRuns.get(seat) !== run || store.game?.players[seat]?.art?.id !== want.id;
+        if (stale || !url) {
+          if (stale) unuse(want.id);
+          return;
+        }
+        t.el.style.setProperty('--art', `url("${url}")`);
+        t.el.style.setProperty('--scrim', String(SCRIM_ALPHA));
+        t.el.dataset.art = 'true';
+      })();
     };
     const updateAll = () => seats.forEach(updateTile);
 
@@ -292,9 +405,11 @@ export function createLife(storage: Storage | null): Life {
       const minus = btn(-1);
       const plus = btn(1);
       const nameEl = h('span', { class: 'tile-name' }, p.name);
+      const artEl = h('div', { class: 'tile-art', 'aria-hidden': 'true' });
       const el = h(
         'div',
         { class: 'tile', 'data-player': seat, 'data-rotate': flipped ? '180' : '0', 'data-warn': 'false', 'data-first': 'false', style: `--tile:${PALETTE[p.color].hex}` },
+        artEl,
         h(
           'div',
           { class: 'tile-inner' },
@@ -303,7 +418,7 @@ export function createLife(storage: Storage | null): Life {
           h('div', { class: 'tile-buttons' }, minus, plus),
         ),
       );
-      parts.set(seat, { life, badges, warn, el, name: nameEl, counters, minus, plus });
+      parts.set(seat, { art: artEl, life, badges, warn, el, name: nameEl, counters, minus, plus });
       return el;
     };
 
@@ -391,36 +506,114 @@ export function createLife(storage: Storage | null): Life {
         if (me === drawId) clearToast();
       }, TOAST_MS);
     });
+    /** The edit dialog's rows while it is open, so art changes can redraw a seat's line. */
+    let rows: PlayerRows | null = null;
+    /** One art change at a time (a picked image or a random one, on any seat): a second press while one runs does nothing. */
+    let artBusy = false;
+    const exclusive = async <T,>(fn: () => Promise<T>): Promise<T | undefined> => {
+      if (artBusy) return undefined;
+      artBusy = true;
+      try {
+        return await fn();
+      } finally {
+        artBusy = false;
+      }
+    };
+
+    /**
+     * Saves the image, then gives the seat the art, so a failed save never leaves a seat pointing at nothing. Answers a
+     * message when nothing was applied, else null. When the game was replaced while the image was saving, the pick is
+     * dropped. With storage blocked the art still applies, from Scryfall's image host, with a note that it won't be kept.
+     */
+    const commitArt = async (seat: number, ref: ArtRef): Promise<string | null> => {
+      rows?.note(seat, '');
+      const keep = new Set<string>([ref.id]);
+      for (const p of store.game!.players) if (p.art) keep.add(p.art.id);
+      for (const a of store.setup.arts ?? []) if (a) keep.add(a.id);
+      const saved = await artStore.save(ref, keep);
+      if (me !== drawId || !store.game?.players[seat]) return null;
+      let session = false;
+      if (saved === null) {
+        // Not saved: either the image was unusable, or storage is blocked (it does not even answer a delete).
+        const storageWorks = await artStore.remove(PROBE);
+        if (me !== drawId || !store.game?.players[seat]) return null;
+        if (storageWorks || !isArtUrl(ref.url)) return SAVE_FAILED;
+        sessionOnly.add(ref.id);
+        session = true;
+      } else sessionOnly.delete(ref.id);
+      clearToast();
+      store.game = setArt(store.game, seat, ref);
+      remember(seat, { art: ref });
+      persist();
+      // Asked for again even when the seat had this very art (its saved image may have been missing).
+      const prev = wanted.get(seat);
+      wanted.delete(seat);
+      updateTile(seat);
+      if (prev && prev !== ref.id) unuse(prev);
+      rows?.refresh(seat);
+      if (session) rows?.note(seat, SESSION_ONLY);
+      return null;
+    };
+    const chooseArt = (seat: number, ref: ArtRef) => exclusive(() => commitArt(seat, ref)).then((message) => (message === undefined ? 'Still saving the last art. Try again in a moment.' : message));
+    const randomFor = async (seat: number) => {
+      const message = await exclusive(async () => {
+        rows?.note(seat, 'Finding art…');
+        let ref: ArtRef;
+        try {
+          ref = await randomArt(client);
+        } catch {
+          return RANDOM_FAILED;
+        }
+        if (me !== drawId) return null;
+        return commitArt(seat, ref);
+      });
+      if (message && me === drawId) rows?.note(seat, message);
+    };
+    const removeArt = (seat: number) => {
+      clearToast();
+      store.game = setArt(store.game!, seat, null);
+      remember(seat, { art: null });
+      persist();
+      updateTile(seat);
+      rows?.refresh(seat);
+      rows?.note(seat, '');
+    };
+
     const edit = h('button', { type: 'button', class: 'button' }, 'Edit names & colors');
     edit.addEventListener('click', () => {
       const closeEdit = h('button', { type: 'button', class: 'button' }, 'Close');
-      const dlg = h(
-        'dialog',
-        { class: 'picker sheet', 'aria-labelledby': 'edit-h' },
-        h('h2', { id: 'edit-h' }, 'Edit players'),
-        playerRows({
-          count: seats.length,
-          name: (i) => store.game!.players[i].name,
-          color: (i) => store.game!.players[i].color,
-          onName: (i, v) => {
-            clearToast();
-            store.game = setName(store.game!, i, v);
-            remember(i, { name: v });
-            updateAll();
-            persist();
-          },
-          onColor: (i, c) => {
-            clearToast();
-            store.game = setColor(store.game!, i, c);
-            remember(i, { color: c });
-            updateAll();
-            persist();
-          },
-        }),
-        h('div', { class: 'actions' }, closeEdit),
-      );
+      rows = playerRows({
+        count: seats.length,
+        name: (i) => store.game!.players[i].name,
+        color: (i) => store.game!.players[i].color,
+        onName: (i, v) => {
+          clearToast();
+          store.game = setName(store.game!, i, v);
+          remember(i, { name: v });
+          updateAll();
+          persist();
+        },
+        onColor: (i, c) => {
+          clearToast();
+          store.game = setColor(store.game!, i, c);
+          remember(i, { color: c });
+          updateAll();
+          persist();
+        },
+        art: {
+          current: (i) => store.game!.players[i].art,
+          choose: (i) => openArtPicker({ host: view, client, label: store.game!.players[i].name, onPick: (ref) => chooseArt(i, ref) }),
+          random: (i) => void randomFor(i),
+          remove: removeArt,
+        },
+      });
+      const mine = rows;
+      const dlg = h('dialog', { class: 'picker sheet', 'aria-labelledby': 'edit-h' }, h('h2', { id: 'edit-h' }, 'Edit players'), mine.el, h('div', { class: 'actions' }, closeEdit));
       closeEdit.addEventListener('click', () => dlg.close());
-      dlg.addEventListener('close', () => dlg.remove());
+      dlg.addEventListener('close', () => {
+        if (rows === mine) rows = null;
+        dlg.remove();
+      });
       view.append(dlg);
       dlg.showModal();
     });
