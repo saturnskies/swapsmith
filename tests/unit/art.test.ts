@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SCRIM_ALPHA, artQuery, artRefOf, dominantColors, planEviction, readable, type ArtSearch } from '../../src/lib/art';
+import { SCRIM_ALPHA, accentSuggestions, artQuery, artRefOf, dominantColors, parseAccent, planEviction, readable, type ArtSearch } from '../../src/lib/art';
 import { contrastWithWhite } from '../../src/lib/life';
 import { MAX_QUERY, quote } from '../../src/lib/browse';
 import type { ScryCard } from '../../src/scryfall/types';
@@ -251,6 +251,51 @@ describe('readable', () => {
 
   it('is null for garbage', () => {
     for (const bad of ['red', '#12', '', '#12345', '#1234567', '#gggggg', 'rgb(0,0,0)']) expect(readable(bad)).toBeNull();
+  });
+});
+
+describe('accentSuggestions', () => {
+  it('offers the dominant colors, each darkened until white text on it reaches 4.5:1', () => {
+    const data = px(solid([240, 210, 40, 255], 30), solid([200, 30, 30, 255], 20), solid([30, 30, 200, 255], 10));
+    const out = accentSuggestions(data);
+    expect(out).toHaveLength(3);
+    for (const hex of out) expect(contrastWithWhite(hex)).toBeGreaterThanOrEqual(4.5);
+    expect(out[0]).toBe(readable('#f0d228'));
+    expect(out[0]).not.toBe('#f0d228');
+    expect(out[1]).toBe('#c81e1e');
+  });
+
+  it('offers at most 6, and no duplicates', () => {
+    const colors: Array<[number, number, number]> = [[200, 30, 30], [30, 200, 30], [30, 30, 200], [200, 200, 30], [30, 200, 200], [200, 30, 200], [120, 60, 30], [60, 120, 30]];
+    const out = accentSuggestions(px(...colors.map((c, i) => solid([...c, 255], 40 - i))));
+    expect(out.length).toBeLessThanOrEqual(6);
+    expect(new Set(out).size).toBe(out.length);
+  });
+
+  it('offers nothing for black, white, transparent or empty images', () => {
+    expect(accentSuggestions(px(solid([0, 0, 0, 255], 64)))).toEqual([]);
+    expect(accentSuggestions(px(solid([255, 255, 255, 255], 64)))).toEqual([]);
+    expect(accentSuggestions(px(solid([200, 30, 30, 0], 64)))).toEqual([]);
+    expect(accentSuggestions(new Uint8ClampedArray(0))).toEqual([]);
+  });
+});
+
+describe('parseAccent', () => {
+  it('takes #rrggbb, rrggbb and #rgb in any case, answering lowercase #rrggbb', () => {
+    expect(parseAccent('#1D4E9E')).toEqual({ hex: '#1d4e9e', adjusted: false });
+    expect(parseAccent(' 1d4e9e ')).toEqual({ hex: '#1d4e9e', adjusted: false });
+    expect(parseAccent('#048')).toEqual({ hex: '#004488', adjusted: false });
+  });
+
+  it('darkens a too-light color and says it did', () => {
+    const out = parseAccent('#ffff00')!;
+    expect(out.adjusted).toBe(true);
+    expect(contrastWithWhite(out.hex)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('is null for anything else', () => {
+    for (const bad of ['', '   ', 'banana', '#12', '#12345', '#1234567', '#gggggg', 'rgb(0,0,0)', '##123456', '#12 34 56']) expect(parseAccent(bad)).toBeNull();
+    expect(parseAccent(undefined as unknown as string)).toBeNull();
   });
 });
 
