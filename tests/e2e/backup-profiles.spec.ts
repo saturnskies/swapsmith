@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { expect, test, type Page, type TestInfo } from '@playwright/test';
 import { mockArt } from './helpers';
-import { editPlayers, menu, start } from './life-helpers';
+import { editPlayers, start } from './life-helpers';
 
 test.beforeEach(async ({ page }) => {
   await mockArt(page);
@@ -17,6 +17,8 @@ async function saveProfile(page: Page, name: string) {
   await page.getByRole('button', { name: 'Save as profile for player 1', exact: true }).click();
   await expect(page.locator('.player-row').first().locator('.profile-note')).toHaveText(`Saved ${name} as a profile.`);
   await page.getByRole('dialog', { name: 'Edit players' }).getByRole('button', { name: 'Close', exact: true }).click();
+  // The Game menu it was opened from is still open underneath.
+  await page.getByRole('dialog', { name: 'Game menu' }).getByRole('button', { name: 'Close', exact: true }).click();
 }
 /** The profile names offered by Use profile for seat 2 in the Life Counter. */
 async function savedNames(page: Page) {
@@ -150,7 +152,6 @@ test('restoring a file that is not a backup still says so and leaves profiles al
 
 test('profiles restored while the Life Counter is open in the same session show without a reload', async ({ page }, testInfo) => {
   await start(page);
-  await (await menu(page)).getByRole('button', { name: 'Close' }).click();
   const file = testInfo.outputPath('one.json');
   writeFileSync(file, BACKUP({ profiles: [{ id: 'pa0000aa', name: 'Kess' }] }));
   await restore(page, file);
