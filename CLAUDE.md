@@ -41,6 +41,8 @@ Any developer should be able to say "run the tests" and have it work on the firs
 - `src/scryfall/art.ts` — art search and random on the shared Scryfall client (`unique=art`, one request per tap, none per keystroke)
 - `src/ui/artStore.ts` — the art image cache: blobs in the `swapsmith-art` IndexedDB, 24 images / 8 MB caps, a keep set, every failure answers null ([ADR-007](docs/decisions/ADR-007-life-counter-art-cache.md)); `src/ui/accent.ts` reads its pixels
 - `src/ui/artPicker.ts` — the art picker dialog (search by name or artist, filters, grid, Load more); `src/ui/life.ts` applies a pick, shows art and accents on tiles and offers the suggestions in the edit dialog ([spec](docs/superpowers/specs/2026-11-13-life-counter-art.md))
+- `src/lib/profiles.ts` — Life Counter player profiles (`{ id, name, art?, accent? }`, at most 12): sanitizer, add/rename/delete, apply to a seat (a copy, not a link), merge for restore; stored as the optional `profiles` in the `swapsmith:life` record (still version 1) and written to the backup file as an optional top-level `profiles` that an older app ignores; pure, unit-tested in `tests/unit/profiles.test.ts` ([spec](docs/superpowers/specs/2026-11-13-life-counter-art.md))
+- `src/ui/profilePicker.ts` — the Use profile dialog; `src/ui/life.ts` saves, uses, renames and deletes profiles, and `src/ui/backup.ts` merges them on Restore through the lazy `ctx.profiles` handle (restore never deletes, stops at 12)
 - `src/ui/native.ts`, `src/ui/backup.ts` — Android back gesture (to Your decks, then exit) and deck backup/restore (share sheet in the app, file download in a browser)
 - `.github/workflows/pages.yml` — CI on every push/PR; deploys `dist/` to Pages from `main` only
 
