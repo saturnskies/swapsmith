@@ -383,6 +383,35 @@ test.describe('how the dead tile looks and behaves', () => {
     await expectReadable(page, 1, base);
   });
 
+  /** The number of near-white pixels in an element's box, read from a real screenshot (text painted under the skull has none). */
+  const whitePixels = async (page: Page, target: Locator) => {
+    const png = (await target.screenshot()).toString('base64');
+    return page.evaluate(async (b64) => {
+      const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+      const bmp = await createImageBitmap(new Blob([bytes], { type: 'image/png' }));
+      const c = new OffscreenCanvas(bmp.width, bmp.height);
+      const g = c.getContext('2d')!;
+      g.drawImage(bmp, 0, 0);
+      const d = g.getImageData(0, 0, bmp.width, bmp.height).data;
+      let n = 0;
+      for (let i = 0; i < d.length; i += 4) if (d[i] > 235 && d[i + 1] > 235 && d[i + 2] > 235) n++;
+      return n;
+    }, png);
+  };
+
+  test('the life number is painted above the skull and splatter, on a tile that is turned and one that is not', async ({ page }) => {
+    await oneLife(page);
+    const before = await whitePixels(page, life(page, 0));
+    expect(before).toBeGreaterThan(50);
+    await minus(page, 'Player 1').click();
+    await minus(page, 'Player 2').click();
+    await rest(page, 0);
+    await rest(page, 1);
+    // "1" becomes "0": a different glyph, so compare against "a clearly drawn number", not the old count.
+    expect(await whitePixels(page, life(page, 0))).toBeGreaterThan(50);
+    expect(await whitePixels(page, life(page, 1))).toBeGreaterThan(50);
+  });
+
   test('a rotated top tile\'s skull and splatter are upright for its player and sit inside the tile', async ({ page }) => {
     await oneLife(page);
     await minus(page, 'Player 2').click(); // seat 1 is the top tile in a 2-player game
