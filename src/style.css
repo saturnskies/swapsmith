@@ -565,7 +565,6 @@ dialog.picker .notice:not(:empty) { margin-block: 0.5rem; }
 }
 .tile:not([data-art='true']) .tile-art { opacity: 0; } /* kept in the layout, invisible, so a death can grey the accent through it */
 .tile:not([data-art='true']) .tile-art::after { content: none; }
-.tile[data-art='true'] { box-shadow: 0 0 14px 1px var(--tile); } /* the accent glows around a tile showing art */
 /* Over art the buttons' light glass would lift the scrim toward grey (3.9:1 on white art): a darker glass keeps their text above 4.5:1. */
 .tile[data-art='true'] .tile-counters { background: rgb(0 0 0 / 0.28); }
 /* Landscape phones are short: the tile is the same two halves, with the line and the number centred between the name row and the bottom. */
@@ -580,7 +579,6 @@ dialog.picker .notice:not(:empty) { margin-block: 0.5rem; }
 /* This dead rule and the no-art opacity rule (above, near .tile-art) tie in specificity: the dead one wins by source order, so keep it below. */
 .tile[data-dead='true'] .tile-art { opacity: 1; filter: grayscale(1) brightness(0.55); }
 .tile[data-dead='true']:not([data-art='true']) .tile-art { background-color: var(--tile); }
-.tile[data-dead='true'][data-art='true'] { box-shadow: none; }
 .tile-death { position: absolute; inset: 0; isolation: isolate; display: grid; place-items: center; border-radius: inherit; overflow: hidden; pointer-events: none; background: rgb(0 0 0 / 0); transition: background-color 0.3s ease; }
 .table-row.top .tile-death { transform: rotate(180deg); } /* the top row faces the far side, and so does its skull */
 .tile-death svg { grid-area: 1 / 1; position: relative; opacity: 0; transition: opacity 0.3s ease; } /* positioned, so the skull (opacity 1, no stacking context of its own) stays above the splatter at .85 */
