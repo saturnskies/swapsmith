@@ -12,6 +12,7 @@ import { createLife } from './life';
 import { renderNewDeck } from './newDeck';
 import { renderPaste } from './paste';
 import { createTabBar } from './tabs';
+import { setImmersive } from './native';
 
 /** Shared state and actions every screen gets. */
 export interface AppContext {
@@ -136,6 +137,7 @@ export function startApp(root: HTMLElement): void {
     }
     // A game fills the screen: the stylesheet hides the header, footer and tab bar while this is set.
     document.body.classList.toggle('in-game', tab === 'life');
+    setImmersive(tab === 'life');
     const switched = tab !== active;
     if (active && switched) scroll[active] = window.scrollY;
     active = tab;

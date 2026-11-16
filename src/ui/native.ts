@@ -1,4 +1,4 @@
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, SystemBars } from '@capacitor/core';
 import { backTarget } from '../lib/nav';
 
 /**
@@ -32,5 +32,20 @@ export function buzz(ms = 80): void {
     navigator.vibrate(ms);
   } catch {
     // A blocked or broken vibrate is not worth a message.
+  }
+}
+
+/**
+ * Inside the Android app the Life Counter takes the whole screen and stays landscape: the status bar and gesture bar are
+ * hidden (a swipe from the edge shows them for a moment), the screen turns to landscape (either side) and stays there, and
+ * every other screen gets the bars and free rotation back. Browsers do nothing. It never throws.
+ */
+export function setImmersive(on: boolean): void {
+  if (!Capacitor.isNativePlatform()) return;
+  void (on ? SystemBars.hide() : SystemBars.show()).catch(() => undefined);
+  try {
+    (window as { SwapsmithNative?: { setLandscape(on: boolean): void } }).SwapsmithNative?.setLandscape(on);
+  } catch {
+    // An app build without the bridge keeps its rotation.
   }
 }

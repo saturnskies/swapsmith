@@ -397,14 +397,14 @@ for (const players of [1, 2, 4]) {
     { width: 390, height: 844 },
     { width: 360, height: 640 },
   ]) {
-    test(`the reset toast covers no life total, life button or Counters button: ${players} player(s) at ${size.width}x${size.height}`, async ({ page }) => {
+    test(`the reset toast covers no life total or Counters button: ${players} player(s) at ${size.width}x${size.height}`, async ({ page }) => {
       await page.setViewportSize(size);
       await start(page, { players });
       await resetTotals(page);
       await expect(toast(page)).toContainText('Life totals reset');
       await page.screenshot({ path: `${process.env.SHOTS ?? '/tmp'}/toast-${players}p-${size.width}x${size.height}.png` });
       const t = (await toast(page).boundingBox())!;
-      const targets = await page.locator('.life-btn, .tile-life, .tile-counters').evaluateAll((els) => els.map((el) => { const r = el.getBoundingClientRect(); return { cls: el.className, x: r.x, y: r.y, w: r.width, h: r.height }; }));
+      const targets = await page.locator('.tile-life, .tile-counters').evaluateAll((els) => els.map((el) => { const r = el.getBoundingClientRect(); return { cls: el.className, x: r.x, y: r.y, w: r.width, h: r.height }; }));
       expect(targets.length).toBeGreaterThan(0);
       for (const r of targets) {
         const overlap = t.x < r.x + r.w && r.x < t.x + t.width && t.y < r.y + r.h && r.y < t.y + t.height;
@@ -421,4 +421,35 @@ test('with one player the Menu button does not cover the Counters button', async
   const c = (await page.locator('.tile-counters').boundingBox())!;
   const overlap = m.x < c.x + c.width && c.x < m.x + m.width && m.y < c.y + c.height && c.y < m.y + m.height;
   expect(overlap, `menu ${JSON.stringify(m)} covers ${JSON.stringify(c)}`).toBe(false);
+});
+
+test('the half you press darkens while pressed and the other half stays clear', async ({ page }) => {
+  await start(page);
+  const half = (name: 'minus' | 'plus') => page.locator(`.tile[data-player="0"] .life-btn.${name}`);
+  const fill = (l: Locator) => l.evaluate((e) => getComputedStyle(e).backgroundColor);
+  expect(await fill(half('minus'))).toBe('rgba(0, 0, 0, 0)');
+  const box = (await half('plus').boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await expect.poll(() => fill(half('plus'))).toMatch(/^rgba\(0, 0, 0, 0\.3/);
+  expect(await fill(half('minus'))).toBe('rgba(0, 0, 0, 0)');
+  await page.mouse.up();
+  await expect.poll(() => fill(half('plus'))).toBe('rgba(0, 0, 0, 0)');
+});
+
+test('the life number is centred on its tile, on every tile and either way up', async ({ page }) => {
+  await page.setViewportSize({ width: 915, height: 412 });
+  await start(page, { players: 4 });
+  const read = await page.locator('.tile').evaluateAll((els) =>
+    els.map((el) => {
+      const t = el.getBoundingClientRect();
+      const l = el.querySelector('.tile-life')!.getBoundingClientRect();
+      return { dx: l.x + l.width / 2 - (t.x + t.width / 2), dy: l.y + l.height / 2 - (t.y + t.height / 2) };
+    }),
+  );
+  expect(read).toHaveLength(4);
+  for (const r of read) {
+    expect(Math.abs(r.dx)).toBeLessThan(0.5);
+    expect(Math.abs(r.dy)).toBeLessThan(1); // the digits are nudged 0.008em (under 1px) so their ink, not their box, is centred
+  }
 });

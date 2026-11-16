@@ -15,8 +15,12 @@ export interface ArtRef {
 
 const TEXT_MAX = 80;
 
-/** Opacity of the black scrim over art. White text on the brightest art under it is white on a 40% grey, 5.7:1 (checked in tests). */
-export const SCRIM_ALPHA = 0.6;
+/** Opacity of the black scrim over all of a tile's art: light, so the art shows. */
+export const SCRIM_ALPHA = 0.4;
+/** Extra black laid over the scrim where text sits (a band on each short edge, an oval behind the life total). Together the two layers leave white text on the brightest art at 4.5:1 or better (checked in tests). */
+export const TEXT_SCRIM_ALPHA = 0.3;
+/** What the two layers add up to over the text. */
+export const TEXT_SCRIM_TOTAL = 1 - (1 - SCRIM_ALPHA) * (1 - TEXT_SCRIM_ALPHA);
 
 /**
  * The art of a card, or null when it has no `illustration_id`, no artist or no art crop. A two-faced card has no

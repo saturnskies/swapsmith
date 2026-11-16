@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { contrastWithWhite } from '../../src/lib/life';
-import { SCRIM_ALPHA, readable } from '../../src/lib/art';
+import { readable } from '../../src/lib/art';
 import { composite, contrastRatio, effectiveBackground, parseColor } from '../support/contrast';
 import { bandsPng, solidPng } from '../support/png';
 import { mockArt, type ArtMock } from './helpers';
@@ -90,7 +90,7 @@ test.describe('suggestions', () => {
     await expect(page.locator('.player-row').nth(1).locator('.accent-choice')).toHaveCount(0);
   });
 
-  test('tapping a suggestion sets the accent on the tile border, glow and − / + buttons, and text stays at 4.5:1', async ({ page }) => {
+  test('tapping a suggestion sets the accent on the tile border and inner glow, and text stays at 4.5:1', async ({ page }) => {
     banded();
     await start(page);
     await pickArt(page);
@@ -106,23 +106,9 @@ test.describe('suggestions', () => {
     const css = await t.evaluate((el) => ({
       tile: getComputedStyle(el).boxShadow,
       ring: getComputedStyle(el.querySelector('.tile-art')!, '::after').boxShadow,
-      btn: getComputedStyle(el.querySelector('.life-btn.minus')!).backgroundColor,
-      btnText: getComputedStyle(el.querySelector('.life-btn.minus')!).color,
-      plus: getComputedStyle(el.querySelector('.life-btn.plus')!).backgroundColor,
     }));
-    expect(css.tile, 'glow').toContain(rgbOf(hex));
-    expect(css.ring, 'border ring').toContain(rgbOf(hex));
-    // The buttons are the accent at 62% (see-through, so the art shows). Their text must stay 4.5:1 over the
-    // brightest art there can be: pure white under the fixed black scrim, with the glass laid on top.
-    for (const c of [css.btn, css.plus]) {
-      const glass = parseColor(c);
-      expect([glass.r, glass.g, glass.b].map(Math.round)).toEqual([1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)));
-      expect(glass.a).toBeCloseTo(0.62, 2);
-    }
-    const scrim = { r: 0, g: 0, b: 0, a: SCRIM_ALPHA };
-    const worstArt = composite(scrim, { r: 255, g: 255, b: 255, a: 1 });
-    const seen = composite(parseColor(css.btn), worstArt);
-    expect(contrastRatio(parseColor(css.btnText), seen)).toBeGreaterThanOrEqual(4.5);
+    expect(css.tile, 'the glow stays inside the tile, so the black gap between tiles is never tinted').toBe('none');
+    expect(css.ring, 'border ring and inner glow').toContain(rgbOf(hex));
     // The row is saved and remembered for the next game.
     await expect.poll(() => savedAccent(page)).toBe(hex);
     expect(await setupAccent(page)).toBe(hex);
