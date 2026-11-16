@@ -403,15 +403,16 @@ body.in-game main.wrap { max-width: none; padding: 0; display: block; }
 .tile-inner { --life-size: clamp(3rem, 15vw, 6.5rem); }
 .tile-inner::before {
   content: '';
-  grid-area: 1 / 1 / -1 / 2;
-  justify-self: center;
-  align-self: stretch;
+  position: absolute;
+  top: 0; /* exactly the tile's edges, no further */
+  bottom: 0;
+  left: 50%;
   width: 2px;
-  margin-block: -0.6rem; /* from the tile's top edge to its bottom edge */
+  margin-left: -1px;
   pointer-events: none;
   background: linear-gradient(to bottom, rgb(255 255 255 / 0.7), transparent calc(50% - var(--life-size) * 0.42), transparent calc(50% + var(--life-size) * 0.42), rgb(255 255 255 / 0.7));
 }
-.tile-life { font-size: var(--life-size); }
+.tile-life { font-size: var(--life-size); transform: translateY(0.008em); } /* the digits' ink sits a hair above the middle of their line box */
 /* The − and + sit beside the number on its row, on the tile's own edges; they take no part in the number's box. */
 /* The number is centred on the tile itself, not on what is left under the name row, so it and the divider's gap are in the same place on every tile; the warning sits above it and the badges below it. */
 .tile-mid { position: absolute; inset: 0; display: grid; grid-template-rows: 1fr auto 1fr; justify-items: center; pointer-events: none; }
