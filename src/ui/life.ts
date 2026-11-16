@@ -1,4 +1,4 @@
-import { SCRIM_ALPHA, accentSuggestions, parseAccent, type ArtRef } from '../lib/art';
+import { SCRIM_ALPHA, TEXT_SCRIM_ALPHA, accentSuggestions, parseAccent, type ArtRef } from '../lib/art';
 import { samplePixels } from './accent';
 import { keepAwake, type AwakeDeps, type AwakeState } from '../lib/awake';
 import {
@@ -595,6 +595,7 @@ export function createLife(storage: Storage | null, client: ScryfallClient, artS
         }
         t.el.style.setProperty('--art', `url("${url}")`);
         t.el.style.setProperty('--scrim', String(SCRIM_ALPHA));
+        t.el.style.setProperty('--text-scrim', String(TEXT_SCRIM_ALPHA));
         t.el.dataset.art = 'true';
       })();
     };
