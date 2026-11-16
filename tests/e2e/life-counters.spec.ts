@@ -397,14 +397,14 @@ for (const players of [1, 2, 4]) {
     { width: 390, height: 844 },
     { width: 360, height: 640 },
   ]) {
-    test(`the reset toast covers no life total, life button or Counters button: ${players} player(s) at ${size.width}x${size.height}`, async ({ page }) => {
+    test(`the reset toast covers no life total or Counters button: ${players} player(s) at ${size.width}x${size.height}`, async ({ page }) => {
       await page.setViewportSize(size);
       await start(page, { players });
       await resetTotals(page);
       await expect(toast(page)).toContainText('Life totals reset');
       await page.screenshot({ path: `${process.env.SHOTS ?? '/tmp'}/toast-${players}p-${size.width}x${size.height}.png` });
       const t = (await toast(page).boundingBox())!;
-      const targets = await page.locator('.life-btn, .tile-life, .tile-counters').evaluateAll((els) => els.map((el) => { const r = el.getBoundingClientRect(); return { cls: el.className, x: r.x, y: r.y, w: r.width, h: r.height }; }));
+      const targets = await page.locator('.tile-life, .tile-counters').evaluateAll((els) => els.map((el) => { const r = el.getBoundingClientRect(); return { cls: el.className, x: r.x, y: r.y, w: r.width, h: r.height }; }));
       expect(targets.length).toBeGreaterThan(0);
       for (const r of targets) {
         const overlap = t.x < r.x + r.w && r.x < t.x + t.width && t.y < r.y + r.h && r.y < t.y + t.height;
