@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SCRIM_ALPHA, accentSuggestions, artQuery, artRefOf, dominantColors, parseAccent, planEviction, readable, type ArtSearch } from '../../src/lib/art';
+import { SCRIM_ALPHA, TEXT_SCRIM_ALPHA, TEXT_SCRIM_TOTAL, accentSuggestions, artQuery, artRefOf, dominantColors, parseAccent, planEviction, readable, type ArtSearch } from '../../src/lib/art';
 import { contrastWithWhite } from '../../src/lib/life';
 import { MAX_QUERY, quote } from '../../src/lib/browse';
 import type { ScryCard } from '../../src/scryfall/types';
@@ -168,12 +168,14 @@ describe('artQuery', () => {
 });
 
 describe('SCRIM_ALPHA', () => {
-  it('is at least 0.6', () => {
-    expect(SCRIM_ALPHA).toBeGreaterThanOrEqual(0.6);
+  it('is a light scrim, so the art shows', () => {
+    expect(SCRIM_ALPHA).toBeLessThanOrEqual(0.45);
+    expect(SCRIM_ALPHA).toBeGreaterThan(0);
   });
 
-  it('keeps white text at 4.5:1 or better over the brightest possible art', () => {
-    const grey = Math.round(255 * (1 - SCRIM_ALPHA));
+  it('keeps white text at 4.5:1 or better over the brightest possible art, with the text scrim added where text sits', () => {
+    expect(TEXT_SCRIM_TOTAL).toBeCloseTo(1 - (1 - SCRIM_ALPHA) * (1 - TEXT_SCRIM_ALPHA), 5);
+    const grey = Math.round(255 * (1 - TEXT_SCRIM_TOTAL));
     const hex = `#${grey.toString(16).padStart(2, '0').repeat(3)}`;
     expect(contrastWithWhite(hex)).toBeGreaterThanOrEqual(4.5);
   });
