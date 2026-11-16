@@ -36,11 +36,16 @@ export function buzz(ms = 80): void {
 }
 
 /**
- * Inside the Android app the Life Counter takes the whole screen: the status bar and gesture bar are hidden
- * (a swipe from the edge shows them for a moment) and every other screen gets them back. Browsers do nothing.
- * It never throws.
+ * Inside the Android app the Life Counter takes the whole screen and stays landscape: the status bar and gesture bar are
+ * hidden (a swipe from the edge shows them for a moment), the screen turns to landscape (either side) and stays there, and
+ * every other screen gets the bars and free rotation back. Browsers do nothing. It never throws.
  */
 export function setImmersive(on: boolean): void {
   if (!Capacitor.isNativePlatform()) return;
   void (on ? SystemBars.hide() : SystemBars.show()).catch(() => undefined);
+  try {
+    (window as { SwapsmithNative?: { setLandscape(on: boolean): void } }).SwapsmithNative?.setLandscape(on);
+  } catch {
+    // An app build without the bridge keeps its rotation.
+  }
 }
