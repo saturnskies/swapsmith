@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { SCRIM_ALPHA } from '../../src/lib/art';
+import { SCRIM_ALPHA, TEXT_SCRIM_TOTAL } from '../../src/lib/art';
 import { composite, contrastRatio, effectiveBackground, parseColor } from '../support/contrast';
 import { solidPng } from '../support/png';
 import { artReplies, mockArt, type ArtMock } from './helpers';
@@ -363,19 +363,20 @@ test.describe('art on a tile', () => {
     const scrim = await t.locator('.tile-art').evaluate((e) => getComputedStyle(e, '::after').backgroundColor);
     expect(parseColor(scrim)).toMatchObject({ r: 0, g: 0, b: 0 });
     expect(parseColor(scrim).a).toBeCloseTo(SCRIM_ALPHA, 2);
-    expect(parseColor(scrim).a).toBeGreaterThanOrEqual(0.6);
+    expect(parseColor(scrim).a).toBeLessThanOrEqual(0.45);
 
-    // Each piece of text, over its own background (the buttons are translucent), the scrim and the whitest possible art.
+    // Each piece of text, over its own background, the scrim (plus the text scrim, which sits behind the name and the life total) and the whitest possible art.
     const parts = await t.evaluate((el) => {
       const pick = (sel: string) => {
         const e = el.querySelector(sel)!;
         return { sel, color: getComputedStyle(e).color, bg: getComputedStyle(e).backgroundColor };
       };
-      return ['.tile-life', '.tile-name', '.tile-counters', '.life-btn.minus', '.life-btn.plus'].map(pick);
+      return ['.tile-life', '.tile-name', '.tile-counters'].map(pick);
     });
     const white = 'rgb(255, 255, 255)';
+    const textScrim = `rgba(0, 0, 0, ${TEXT_SCRIM_TOTAL})`;
     for (const part of parts) {
-      const bg = effectiveBackground([part.bg, scrim, white]);
+      const bg = effectiveBackground([part.bg, textScrim, white]);
       const text = parseColor(part.color);
       const over = composite(text, bg);
       expect(contrastRatio(over, bg), part.sel).toBeGreaterThanOrEqual(4.5);
