@@ -90,7 +90,7 @@ test.describe('suggestions', () => {
     await expect(page.locator('.player-row').nth(1).locator('.accent-choice')).toHaveCount(0);
   });
 
-  test('tapping a suggestion sets the accent on the tile border, glow and − / + buttons, and text stays at 4.5:1', async ({ page }) => {
+  test('tapping a suggestion sets the accent on the tile border and inner glow, and text stays at 4.5:1', async ({ page }) => {
     banded();
     await start(page);
     await pickArt(page);
@@ -107,7 +107,7 @@ test.describe('suggestions', () => {
       tile: getComputedStyle(el).boxShadow,
       ring: getComputedStyle(el.querySelector('.tile-art')!, '::after').boxShadow,
     }));
-    expect(css.tile, 'glow').toContain(rgbOf(hex));
+    expect(css.tile, 'the glow stays inside the tile, so the black gap between tiles is never tinted').toBe('none');
     expect(css.ring, 'border ring and inner glow').toContain(rgbOf(hex));
     // The row is saved and remembered for the next game.
     await expect.poll(() => savedAccent(page)).toBe(hex);
