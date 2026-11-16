@@ -436,3 +436,20 @@ test('the half you press darkens while pressed and the other half stays clear', 
   await page.mouse.up();
   await expect.poll(() => fill(half('plus'))).toBe('rgba(0, 0, 0, 0)');
 });
+
+test('the life number is centred on its tile, on every tile and either way up', async ({ page }) => {
+  await page.setViewportSize({ width: 915, height: 412 });
+  await start(page, { players: 4 });
+  const read = await page.locator('.tile').evaluateAll((els) =>
+    els.map((el) => {
+      const t = el.getBoundingClientRect();
+      const l = el.querySelector('.tile-life')!.getBoundingClientRect();
+      return { dx: l.x + l.width / 2 - (t.x + t.width / 2), dy: l.y + l.height / 2 - (t.y + t.height / 2) };
+    }),
+  );
+  expect(read).toHaveLength(4);
+  for (const r of read) {
+    expect(Math.abs(r.dx)).toBeLessThan(0.5);
+    expect(Math.abs(r.dy)).toBeLessThan(0.5);
+  }
+});
