@@ -450,6 +450,6 @@ test('the life number is centred on its tile, on every tile and either way up', 
   expect(read).toHaveLength(4);
   for (const r of read) {
     expect(Math.abs(r.dx)).toBeLessThan(0.5);
-    expect(Math.abs(r.dy)).toBeLessThan(0.5);
+    expect(Math.abs(r.dy)).toBeLessThan(1); // the digits are nudged 0.008em (under 1px) so their ink, not their box, is centred
   }
 });
