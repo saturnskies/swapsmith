@@ -422,3 +422,17 @@ test('with one player the Menu button does not cover the Counters button', async
   const overlap = m.x < c.x + c.width && c.x < m.x + m.width && m.y < c.y + c.height && c.y < m.y + m.height;
   expect(overlap, `menu ${JSON.stringify(m)} covers ${JSON.stringify(c)}`).toBe(false);
 });
+
+test('the half you press darkens while pressed and the other half stays clear', async ({ page }) => {
+  await start(page);
+  const half = (name: 'minus' | 'plus') => page.locator(`.tile[data-player="0"] .life-btn.${name}`);
+  const fill = (l: Locator) => l.evaluate((e) => getComputedStyle(e).backgroundColor);
+  expect(await fill(half('minus'))).toBe('rgba(0, 0, 0, 0)');
+  const box = (await half('plus').boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await expect.poll(() => fill(half('plus'))).toMatch(/^rgba\(0, 0, 0, 0\.3/);
+  expect(await fill(half('minus'))).toBe('rgba(0, 0, 0, 0)');
+  await page.mouse.up();
+  await expect.poll(() => fill(half('plus'))).toBe('rgba(0, 0, 0, 0)');
+});
