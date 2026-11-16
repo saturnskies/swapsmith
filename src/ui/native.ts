@@ -1,4 +1,4 @@
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, SystemBars } from '@capacitor/core';
 import { backTarget } from '../lib/nav';
 
 /**
@@ -33,4 +33,14 @@ export function buzz(ms = 80): void {
   } catch {
     // A blocked or broken vibrate is not worth a message.
   }
+}
+
+/**
+ * Inside the Android app the Life Counter takes the whole screen: the status bar and gesture bar are hidden
+ * (a swipe from the edge shows them for a moment) and every other screen gets them back. Browsers do nothing.
+ * It never throws.
+ */
+export function setImmersive(on: boolean): void {
+  if (!Capacitor.isNativePlatform()) return;
+  void (on ? SystemBars.hide() : SystemBars.show()).catch(() => undefined);
 }
