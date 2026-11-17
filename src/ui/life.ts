@@ -1135,14 +1135,14 @@ export function createLife(storage: Storage | null, client: ScryfallClient, artS
       h('div', { class: 'menu-actions' }, undoBtn, rollBtn, newBtn, defaultsBtn, edit, profilesBtn, reset, h('a', { class: 'button', href: '#/' }, 'Leave game'), close),
     );
     close.addEventListener('click', () => menu.close());
-    const open = h('button', { type: 'button', class: `table-menu${top.length ? '' : ' corner'}`, 'data-orient': seats.length === 2 ? 'vertical' : 'horizontal', 'aria-label': 'Game menu' }, 'Menu');
+    const open = h('button', { type: 'button', class: `table-menu${top.length ? '' : ' corner'}`, 'aria-label': 'Game menu' }, 'Menu');
     open.addEventListener('click', () => {
       refreshUndo();
       menu.showModal();
     });
 
     view.replaceChildren(
-      h('section', { class: 'table', 'aria-label': 'Life totals' }, top.length ? h('div', { class: 'table-row top' }, ...top.map((s) => tile(s, true))) : null, h('div', { class: 'table-row bottom' }, ...bottom.map((s) => tile(s, false))), open, toast, menu),
+      h('section', { class: 'table', 'data-layout': seats.length === 4 ? 'side' : 'stack', 'data-players': String(seats.length), 'aria-label': 'Life totals' }, top.length ? h('div', { class: 'table-row top' }, ...top.map((s) => tile(s, true))) : null, h('div', { class: 'table-row bottom' }, ...bottom.map((s) => tile(s, false))), open, toast, menu),
     );
     /**
      * Cuts a rounded hole in each tile around the center Menu button, one gap (the 6px between tiles) wider than the button on every side,
@@ -1179,8 +1179,8 @@ export function createLife(storage: Storage | null, client: ScryfallClient, artS
       hubWatch = new ResizeObserver(placeHub);
       hubWatch.observe(view.querySelector('.table')!);
     }
+    updateAll(); // first, so no style is computed (and no transition starts) from the tiles' alive look
     placeHub();
-    updateAll();
   }
 
   return {
