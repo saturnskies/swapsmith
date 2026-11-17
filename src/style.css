@@ -463,8 +463,8 @@ body.in-game main.wrap { max-width: none; padding: 0; display: block; }
   height: 3.25rem;
   border-radius: 14px; /* the tiles' corner radius */
   border: 2px solid #9aa0a6; /* a touch lighter than the grey frame around it */
-  background: var(--panel);
-  color: var(--ink);
+  background: #17181b; /* dark, whatever the page theme */
+  color: #fff; /* the icon's bars follow the text color */
   font: 600 0.75rem var(--font-body);
   cursor: pointer;
   z-index: 2;
