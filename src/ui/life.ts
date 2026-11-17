@@ -23,6 +23,8 @@ import {
   setArt,
   setColor,
   setFirst,
+  swapSeats,
+  swapSetupSeats,
   setName,
   setPartners,
   undo,
@@ -41,6 +43,7 @@ import { deathOverlay } from './deathArt';
 import { h, icon } from './dom';
 import { buzz } from './native';
 import { openProfilePicker } from './profilePicker';
+import { openSeatPicker } from './seatPicker';
 
 /** A press this long (ms) counts as a hold: ±10 instead of ±1. */
 const HOLD_MS = 500;
@@ -1123,6 +1126,29 @@ export function createLife(storage: Storage | null, client: ScryfallClient, artS
     newBtn.addEventListener('click', () => openSetupSheet(newGameDialog));
     const defaultsBtn = h('button', { type: 'button', class: 'button' }, 'Defaults');
     defaultsBtn.addEventListener('click', () => openSetupSheet(defaultsDialog));
+    /** Game menu → Arrange seats: the table in small, drag one player onto another seat to trade places. */
+    const arrangeBtn = h('button', { type: 'button', class: 'button' }, 'Arrange seats');
+    arrangeBtn.addEventListener('click', () => {
+      menu.close();
+      openSeatPicker({
+        host: view,
+        layout: seating(seats.length),
+        players: () => store.game!.players.map((p) => ({ name: p.name, color: p.color, accent: p.accent, life: p.life })),
+        onSwap: (a, b) => {
+          if (me !== drawId || !store.game) return;
+          clearToast();
+          const next = swapSeats(store.game, a, b);
+          if (next === store.game) return;
+          store.game = next;
+          store.setup = swapSetupSeats(store.setup, a, b);
+          // The players moved, they did not just die: set each moved seat's dead state first so no burst plays.
+          for (const s of [a, b]) parts.get(s)!.el.dataset.dead = String(isDead(next, s));
+          updateAll();
+          persist();
+        },
+        onClose: () => open.focus(),
+      });
+    });
     const profilesBtn = h('button', { type: 'button', class: 'button' }, 'Profiles');
     profilesBtn.addEventListener('click', profilesDialog);
     const close = h('button', { type: 'button', class: 'button' }, 'Close');
@@ -1132,7 +1158,7 @@ export function createLife(storage: Storage | null, client: ScryfallClient, artS
       h('h2', { id: 'game-menu-h' }, 'Game menu'),
       notice(),
       awakeNote(),
-      h('div', { class: 'menu-actions' }, undoBtn, rollBtn, newBtn, defaultsBtn, edit, profilesBtn, reset, h('a', { class: 'button', href: '#/' }, 'Leave game'), close),
+      h('div', { class: 'menu-actions' }, undoBtn, rollBtn, newBtn, defaultsBtn, edit, seats.length > 1 ? arrangeBtn : null, profilesBtn, reset, h('a', { class: 'button', href: '#/' }, 'Leave game'), close),
     );
     close.addEventListener('click', () => menu.close());
     const open = h('button', { type: 'button', class: `table-menu${top.length ? '' : ' corner'}`, 'aria-label': 'Game menu' }, h('span', { class: 'menu-icon', 'aria-hidden': 'true' }));
