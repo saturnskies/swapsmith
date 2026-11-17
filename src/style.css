@@ -729,14 +729,18 @@ dialog.picker .notice:not(:empty) { margin-block: 0.5rem; }
 .add-panel { border-top: 1px solid var(--line); padding-top: 0.75rem; }
 .add-notes p { margin: 0.25rem 0 0; color: var(--danger); font-weight: 600; }
 
-/* Arrange seats: the table in small. Each slot is a seat; the chip in it is the player there. */
-.seat-grid { display: flex; flex-direction: column; gap: 6px; margin: 0.75rem 0; }
-.seat-row { display: flex; gap: 6px; }
-.seat-slot { flex: 1; min-width: 0; min-height: 4.5rem; border-radius: 14px; border: 2px dashed var(--line); display: flex; padding: 2px; }
-.seat-slot.target { border-color: var(--ink); background: color-mix(in srgb, var(--ink) 10%, transparent); }
+/* Arrange seats: the table in small, shaped like the phone (tall held upright, wide held sideways), in dark colors like the table. Each slot is a seat; the chip in it is the player there. */
+.seat-picker { --panel: #17181b; --ink: #f2f3f5; --line: #3a3d42; --muted: #a9adb4; --accent: #8ab4ff; background: var(--panel); color: var(--ink); width: min(92vw, 34rem); }
+.seat-picker .button { background: #24262a; color: var(--ink); border-color: #4a4d52; }
+.seat-picker::backdrop { background: rgb(0 0 0 / 0.7); }
+.seat-grid { display: flex; flex-direction: column; gap: 6px; margin: 0.75rem auto; height: min(52dvh, 26rem); aspect-ratio: 3 / 4; max-width: 100%; }
+@media (orientation: landscape) { .seat-grid { height: max(6rem, calc(100dvh - 16.5rem)); aspect-ratio: 16 / 9; } }
+.seat-row { flex: 1; display: flex; gap: 6px; min-height: 0; }
+.seat-slot { flex: 1; min-width: 0; border-radius: 14px; border: 2px dashed var(--line); display: flex; padding: 2px; }
+.seat-slot.target { border-color: #fff; background: rgb(255 255 255 / 0.12); }
 .seat-chip { flex: 1; min-width: 0; display: grid; place-items: center; align-content: center; gap: 0.1rem; padding: 0.4rem; border-radius: 11px; border: 2px solid transparent; background: var(--tile); color: #fff; font: 600 0.95rem var(--font-body); cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
-.seat-chip[aria-pressed='true'] { border-color: #fff; box-shadow: 0 0 0 3px var(--ink); }
-.seat-chip.dragging { position: relative; z-index: 2; cursor: grabbing; box-shadow: 0 8px 24px rgb(0 0 0 / 0.4); }
+.seat-chip[aria-pressed='true'] { border-color: #fff; box-shadow: 0 0 0 3px #8a8f98; }
+.seat-chip.dragging { position: relative; z-index: 2; cursor: grabbing; box-shadow: 0 8px 24px rgb(0 0 0 / 0.6); }
 .seat-chip:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 .seat-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .seat-life { font: 700 1.5rem var(--font-display); font-variant-numeric: tabular-nums; }
