@@ -728,3 +728,15 @@ dialog.picker .notice:not(:empty) { margin-block: 0.5rem; }
 /* Add to deck */
 .add-panel { border-top: 1px solid var(--line); padding-top: 0.75rem; }
 .add-notes p { margin: 0.25rem 0 0; color: var(--danger); font-weight: 600; }
+
+/* Arrange seats: the table in small. Each slot is a seat; the chip in it is the player there. */
+.seat-grid { display: flex; flex-direction: column; gap: 6px; margin: 0.75rem 0; }
+.seat-row { display: flex; gap: 6px; }
+.seat-slot { flex: 1; min-width: 0; min-height: 4.5rem; border-radius: 14px; border: 2px dashed var(--line); display: flex; padding: 2px; }
+.seat-slot.target { border-color: var(--ink); background: color-mix(in srgb, var(--ink) 10%, transparent); }
+.seat-chip { flex: 1; min-width: 0; display: grid; place-items: center; align-content: center; gap: 0.1rem; padding: 0.4rem; border-radius: 11px; border: 2px solid transparent; background: var(--tile); color: #fff; font: 600 0.95rem var(--font-body); cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
+.seat-chip[aria-pressed='true'] { border-color: #fff; box-shadow: 0 0 0 3px var(--ink); }
+.seat-chip.dragging { position: relative; z-index: 2; cursor: grabbing; box-shadow: 0 8px 24px rgb(0 0 0 / 0.4); }
+.seat-chip:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.seat-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.seat-life { font: 700 1.5rem var(--font-display); font-variant-numeric: tabular-nums; }
