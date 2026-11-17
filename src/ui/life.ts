@@ -494,6 +494,7 @@ export function createLife(storage: Storage | null, client: ScryfallClient, artS
     return n;
   };
 
+  let hubWatch: ResizeObserver | undefined;
   function drawGame(view: HTMLElement) {
     const me = ++drawId;
     // The tiles of the draw before are gone: let go of their pictures; the new tiles ask again.
@@ -622,7 +623,7 @@ export function createLife(storage: Storage | null, client: ScryfallClient, artS
       const minus = btn(-1);
       const plus = btn(1);
       const nameEl = h('span', { class: 'tile-name' }, p.name);
-      const artEl = h('div', { class: 'tile-art', 'aria-hidden': 'true' });
+      const artEl = h('div', { class: 'tile-art', 'aria-hidden': 'true' }, h('div', { class: 'hub-glow' }));
       const el = h(
         'div',
         { class: 'tile', 'data-player': seat, 'data-rotate': flipped ? '180' : '0', 'data-warn': 'false', 'data-first': 'false', style: `--tile:${p.accent ?? PALETTE[p.color].hex}` },
@@ -1134,7 +1135,7 @@ export function createLife(storage: Storage | null, client: ScryfallClient, artS
       h('div', { class: 'menu-actions' }, undoBtn, rollBtn, newBtn, defaultsBtn, edit, profilesBtn, reset, h('a', { class: 'button', href: '#/' }, 'Leave game'), close),
     );
     close.addEventListener('click', () => menu.close());
-    const open = h('button', { type: 'button', class: `table-menu${top.length ? '' : ' corner'}`, 'aria-label': 'Game menu' }, 'Menu');
+    const open = h('button', { type: 'button', class: `table-menu${top.length ? '' : ' corner'}`, 'data-orient': seats.length === 2 ? 'vertical' : 'horizontal', 'aria-label': 'Game menu' }, 'Menu');
     open.addEventListener('click', () => {
       refreshUndo();
       menu.showModal();
@@ -1143,6 +1144,26 @@ export function createLife(storage: Storage | null, client: ScryfallClient, artS
     view.replaceChildren(
       h('section', { class: 'table', 'aria-label': 'Life totals' }, top.length ? h('div', { class: 'table-row top' }, ...top.map((s) => tile(s, true))) : null, h('div', { class: 'table-row bottom' }, ...bottom.map((s) => tile(s, false))), open, toast, menu),
     );
+    /** Tells each tile where the center Menu button sits (in the tile's own frame) so its glow and outline can go around it. */
+    const placeHub = () => {
+      if (!open.isConnected || open.classList.contains('corner')) return;
+      const m = open.getBoundingClientRect();
+      for (const { el, art } of parts.values()) {
+        const t = el.getBoundingClientRect();
+        const near = m.right > t.left && m.left < t.right && m.bottom > t.top && m.top < t.bottom;
+        art.style.setProperty('--hub-on', near ? '1' : '0');
+        art.style.setProperty('--hx', `${m.left - t.left}px`);
+        art.style.setProperty('--hy', `${m.top - t.top}px`);
+        art.style.setProperty('--hw', `${m.width}px`);
+        art.style.setProperty('--hh', `${m.height}px`);
+      }
+    };
+    if (typeof ResizeObserver !== 'undefined') {
+      hubWatch?.disconnect();
+      hubWatch = new ResizeObserver(placeHub);
+      hubWatch.observe(view.querySelector('.table')!);
+    }
+    placeHub();
     updateAll();
   }
 
