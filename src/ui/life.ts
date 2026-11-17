@@ -1135,7 +1135,7 @@ export function createLife(storage: Storage | null, client: ScryfallClient, artS
       h('div', { class: 'menu-actions' }, undoBtn, rollBtn, newBtn, defaultsBtn, edit, profilesBtn, reset, h('a', { class: 'button', href: '#/' }, 'Leave game'), close),
     );
     close.addEventListener('click', () => menu.close());
-    const open = h('button', { type: 'button', class: `table-menu${top.length ? '' : ' corner'}`, 'aria-label': 'Game menu' }, 'Menu');
+    const open = h('button', { type: 'button', class: `table-menu${top.length ? '' : ' corner'}`, 'aria-label': 'Game menu' }, h('span', { class: 'menu-icon', 'aria-hidden': 'true' }));
     open.addEventListener('click', () => {
       refreshUndo();
       menu.showModal();
