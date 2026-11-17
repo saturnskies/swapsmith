@@ -1144,18 +1144,34 @@ export function createLife(storage: Storage | null, client: ScryfallClient, artS
     view.replaceChildren(
       h('section', { class: 'table', 'aria-label': 'Life totals' }, top.length ? h('div', { class: 'table-row top' }, ...top.map((s) => tile(s, true))) : null, h('div', { class: 'table-row bottom' }, ...bottom.map((s) => tile(s, false))), open, toast, menu),
     );
-    /** Tells each tile where the center Menu button sits (in the tile's own frame) so its glow and outline can go around it. */
+    /**
+     * Cuts a rounded hole in each tile around the center Menu button, one gap (the 6px between tiles) wider than the button on every side,
+     * and tells the tile's art where the hole is so its glow and outline follow the hole's edge, as they do along the gap to the next player.
+     */
     const placeHub = () => {
       if (!open.isConnected || open.classList.contains('corner')) return;
+      const GAP = 6; // the table's gap between tiles, in px (.table in style.css)
+      const R = 14 + GAP; // the button's corner radius plus the gap keeps the two curves concentric
       const m = open.getBoundingClientRect();
       for (const { el, art } of parts.values()) {
         const t = el.getBoundingClientRect();
-        const near = m.right > t.left && m.left < t.right && m.bottom > t.top && m.top < t.bottom;
+        const x = m.left - GAP - t.left;
+        const y = m.top - GAP - t.top;
+        const w = m.width + 2 * GAP;
+        const hh = m.height + 2 * GAP;
+        const near = x < t.width && x + w > 0 && y < t.height && y + hh > 0;
         art.style.setProperty('--hub-on', near ? '1' : '0');
-        art.style.setProperty('--hx', `${m.left - t.left}px`);
-        art.style.setProperty('--hy', `${m.top - t.top}px`);
-        art.style.setProperty('--hw', `${m.width}px`);
-        art.style.setProperty('--hh', `${m.height}px`);
+        art.style.setProperty('--hx', `${x}px`);
+        art.style.setProperty('--hy', `${y}px`);
+        art.style.setProperty('--hw', `${w}px`);
+        art.style.setProperty('--hh', `${hh}px`);
+        const mask = near
+          ? `url("data:image/svg+xml,${encodeURIComponent(
+              `<svg xmlns='http://www.w3.org/2000/svg' width='${t.width}' height='${t.height}'><path fill-rule='evenodd' d='M0 0H${t.width}V${t.height}H0Z M${x + R} ${y}H${x + w - R}A${R} ${R} 0 0 1 ${x + w} ${y + R}V${y + hh - R}A${R} ${R} 0 0 1 ${x + w - R} ${y + hh}H${x + R}A${R} ${R} 0 0 1 ${x} ${y + hh - R}V${y + R}A${R} ${R} 0 0 1 ${x + R} ${y}Z'/></svg>`,
+            )}")`
+          : '';
+        el.style.setProperty('mask-image', mask);
+        el.style.setProperty('-webkit-mask-image', mask);
       }
     };
     if (typeof ResizeObserver !== 'undefined') {
