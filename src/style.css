@@ -470,6 +470,10 @@ body.in-game main.wrap { max-width: none; padding: 0; display: block; }
   z-index: 2;
 }
 .table-menu.corner { width: 3.5rem; height: 3.5rem; }
+.table[data-layout='side'] .table-menu:not(.corner) { width: 3.25rem; height: 5.5rem; } /* four players sit at the sides, so the button stands up */
+/* Three bars (the menu icon) instead of a word: the same from every seat, upside down or not. */
+.table-menu { display: grid; place-items: center; padding: 0; }
+.menu-icon { display: block; width: 1.5rem; height: 1.1rem; background: linear-gradient(currentColor 0 0) top / 100% 3px, linear-gradient(currentColor 0 0) center / 100% 3px, linear-gradient(currentColor 0 0) bottom / 100% 3px; background-repeat: no-repeat; border-radius: 2px; }
 /* Each tile's glow and outline also trace the center Menu button; life.ts sets --hx/--hy/--hw/--hh to where the button sits in the tile. The tile's art clips it. */
 .hub-glow { display: none; }
 .tile-art .hub-glow {
@@ -490,7 +494,7 @@ body.in-game main.wrap { max-width: none; padding: 0; display: block; }
 .table[data-layout='side'] .tile { container-type: size; }
 .table[data-layout='side'] .tile-inner { position: absolute; flex: none; left: 50%; top: 50%; width: 100cqh; height: 100cqw; transform: translate(-50%, -50%) rotate(90deg); }
 .table[data-layout='side'] .tile:nth-child(2) .tile-inner { transform: translate(-50%, -50%) rotate(-90deg); }
-.table[data-layout='side'] .tile-head { padding-inline: 2.4rem; } /* the hole for the Menu button takes a corner at either end of the tile's seam side */
+.table[data-layout='side'] .tile-head { padding-inline: 3.4rem; } /* the hole for the Menu button takes a corner at either end of the tile's seam side */
 .table[data-layout='side'] .table-row.top .tile-death { transform: none; }
 .table:has(.table-menu.corner) .tile-head { padding-right: 4rem; } /* one player: the corner Menu button leaves the Counters button clear */
 .table-menu:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
