@@ -9,6 +9,7 @@ import {
   applyChange,
   changeLife,
   contrastWithWhite,
+  counter,
   defaultSetup,
   emptyLife,
   gameFromDefaults,
@@ -27,6 +28,8 @@ import {
   setAccent,
   setArt,
   setPartners,
+  swapSeats,
+  swapSetupSeats,
   undo,
   warnings,
   type Game,
@@ -857,5 +860,66 @@ describe('seat art and accent', () => {
     expect(g.players[0]).not.toHaveProperty('art');
     expect(g.players[1].art).toEqual(art());
     expect(g.players[1]).not.toHaveProperty('accent');
+  });
+});
+
+describe('swapSeats', () => {
+  const three = () => {
+    let g = newGame({ ...defaultSetup(), players: 3, startingLife: 40, names: ['Ann', 'Bo', 'Cy'] });
+    g = applyChange(g, 0, { kind: 'life' }, -5);
+    g = applyChange(g, 1, { kind: 'cmdr', from: 0, slot: 0 }, 7);
+    g = applyChange(g, 2, { kind: 'cmdr', from: 1, slot: 0 }, 3);
+    return setFirst(g, 0);
+  };
+
+  it('moves each player, with their life and name, to the other seat', () => {
+    const g = swapSeats(three(), 0, 2);
+    expect(g.players.map((p) => p.name)).toEqual(['Cy', 'Bo', 'Ann']);
+    expect(g.players[2].life).toBe(35);
+    expect(g.players[0].life).toBe(40);
+  });
+
+  it('keeps commander damage with the commanders that dealt it', () => {
+    const g = swapSeats(three(), 0, 2);
+    // Bo took 7 from Ann's commander, who now sits in seat 2; Ann took none. Cy (now seat 0) took 3 from Bo (seat 1).
+    expect(counter(g, 1, { kind: 'cmdr', from: 2, slot: 0 })).toBe(7);
+    expect(counter(g, 0, { kind: 'cmdr', from: 1, slot: 0 })).toBe(3);
+    expect(counter(g, 1, { kind: 'cmdr', from: 0, slot: 0 })).toBe(0);
+  });
+
+  it('keeps the undo list and the first player with the same people', () => {
+    const g = swapSeats(three(), 0, 2);
+    expect(g.first).toBe(2);
+    const back = undo(g); // the last change was Cy taking 3 from Bo
+    expect(back.players[0].name).toBe('Cy');
+    expect(counter(back, 0, { kind: 'cmdr', from: 1, slot: 0 })).toBe(0);
+    const earlier = undo(back); // Bo's 7 from Ann
+    expect(counter(earlier, 1, { kind: 'cmdr', from: 2, slot: 0 })).toBe(0);
+  });
+
+  it('is its own inverse and returns the same game for the same seat or a seat that is not there', () => {
+    const g = three();
+    expect(swapSeats(swapSeats(g, 0, 2), 0, 2)).toEqual(g);
+    expect(swapSeats(g, 1, 1)).toBe(g);
+    expect(swapSeats(g, 0, 3)).toBe(g);
+    expect(swapSeats(g, -1, 0)).toBe(g);
+  });
+
+  it('carries a partner commander along (slot 1 damage too)', () => {
+    let g = newGame({ ...defaultSetup(), players: 2, startingLife: 40 });
+    g = setPartners(g, 0, true);
+    g = applyChange(g, 1, { kind: 'cmdr', from: 0, slot: 1 }, 4);
+    const s = swapSeats(g, 0, 1);
+    expect(s.players[1].partners).toBe(true);
+    expect(counter(s, 0, { kind: 'cmdr', from: 1, slot: 1 })).toBe(4);
+  });
+});
+
+describe('swapSetupSeats', () => {
+  it('swaps the remembered name, color, art and accent of two seats, including short lists', () => {
+    const s = swapSetupSeats({ ...defaultSetup(), players: 3, names: ['A', 'B'], colors: [1], accents: ['#112233'] }, 0, 2);
+    expect(s.names).toEqual(['', 'B', 'A']);
+    expect(s.colors).toEqual([-1, -1, 1]);
+    expect(s.accents).toEqual([null, null, '#112233']);
   });
 });
