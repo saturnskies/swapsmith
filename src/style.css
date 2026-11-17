@@ -394,7 +394,7 @@ body.in-game main.wrap { max-width: none; padding: 0; display: block; }
   padding: max(6px, env(safe-area-inset-top, 0px)) max(6px, env(safe-area-inset-right, 0px)) max(6px, env(safe-area-inset-bottom, 0px)) max(6px, env(safe-area-inset-left, 0px));
 }
 .table-row { flex: 1; display: flex; gap: 6px; min-height: 0; }
-.tile { position: relative; flex: 1; min-width: 0; display: flex; background: var(--tile); color: #fff; border-radius: 14px; }
+.tile { -webkit-mask-size: 100% 100%; mask-size: 100% 100%; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; position: relative; flex: 1; min-width: 0; display: flex; background: var(--tile); color: #fff; border-radius: 14px; }
 .tile-inner { position: relative; flex: 1; min-width: 0; border-radius: inherit; display: grid; grid-template-rows: auto 1fr; justify-items: center; align-items: center; gap: 0.4rem; padding: 0.6rem; }
 .table-row.top .tile-inner { transform: rotate(180deg); }
 .tile-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
@@ -480,11 +480,13 @@ body.in-game main.wrap { max-width: none; padding: 0; display: block; }
   top: var(--hy, 0);
   width: var(--hw, 0);
   height: var(--hh, 0);
-  border-radius: 14px;
+  z-index: 1; /* above the scrim, like the tile's own edge glow */
+  border-radius: 20px; /* the button's 14px plus the 6px gap */
   box-shadow: 0 0 34px 4px color-mix(in srgb, var(--tile) 85%, transparent), 0 0 0 3px var(--tile);
 }
 .tile-art[style*='--hub-on: 0'] .hub-glow { display: none; }
 .table-menu.corner { left: auto; top: max(10px, env(safe-area-inset-top, 0px)); right: max(10px, env(safe-area-inset-right, 0px)); transform: none; }
+.table:has(.table-menu[data-orient='horizontal']:not(.corner)) .tile-head { margin-top: 1.6rem; } /* the center Menu button's hole takes the seam end of the tile: the name and Counters sit below it */
 .table:has(.table-menu.corner) .tile-head { padding-right: 4rem; } /* one player: the corner Menu button leaves the Counters button clear */
 .table-menu:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 /* The reset toast under the menu button, in the look of .toast. Empty, it is the 1px clipped box above. */
