@@ -494,7 +494,10 @@ body.in-game main.wrap { max-width: none; padding: 0; display: block; }
 .table[data-layout='side'] .tile { container-type: size; }
 .table[data-layout='side'] .tile-inner { position: absolute; flex: none; left: 50%; top: 50%; width: 100cqh; height: 100cqw; transform: translate(-50%, -50%) rotate(90deg); }
 .table[data-layout='side'] .tile:nth-child(2) .tile-inner { transform: translate(-50%, -50%) rotate(-90deg); }
-.table[data-layout='side'] .tile-head { padding-inline: 3.4rem; } /* the hole for the Menu button takes a corner at either end of the tile's seam side */
+/* Only the end of the tile's seam side that is next to the center is kept clear: the Menu button's hole there, and under it the reset toast. Which end that is depends on the column (which way the seat is turned) and the row. */
+.table[data-layout='side'] .table-row.top .tile:nth-child(1) .tile-head, .table[data-layout='side'] .table-row.bottom .tile:nth-child(2) .tile-head { padding-inline-end: 6.8rem; }
+.table[data-layout='side'] .table-row.top .tile:nth-child(2) .tile-head, .table[data-layout='side'] .table-row.bottom .tile:nth-child(1) .tile-head { padding-inline-start: 6.8rem; }
+.table[data-layout='side'] .life-toast:not(:empty) { top: calc(50% + 3.4rem); }
 .table[data-layout='side'] .table-row.top .tile-death { transform: none; }
 .table:has(.table-menu.corner) .tile-head { padding-right: 4rem; } /* one player: the corner Menu button leaves the Counters button clear */
 .table-menu:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
