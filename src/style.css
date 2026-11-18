@@ -394,7 +394,7 @@ body.in-game main.wrap { max-width: none; padding: 0; display: block; }
   padding: max(6px, env(safe-area-inset-top, 0px)) max(6px, env(safe-area-inset-right, 0px)) max(6px, env(safe-area-inset-bottom, 0px)) max(6px, env(safe-area-inset-left, 0px));
 }
 .table-row { flex: 1; display: flex; gap: 6px; min-height: 0; }
-.tile { position: relative; flex: 1; min-width: 0; display: flex; background: var(--tile); color: #fff; border-radius: 14px; }
+.tile { -webkit-mask-size: 100% 100%; mask-size: 100% 100%; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; position: relative; flex: 1; min-width: 0; display: flex; background: var(--tile); color: #fff; border-radius: 14px; }
 .tile-inner { position: relative; flex: 1; min-width: 0; border-radius: inherit; display: grid; grid-template-rows: auto 1fr; justify-items: center; align-items: center; gap: 0.4rem; padding: 0.6rem; }
 .table-row.top .tile-inner { transform: rotate(180deg); }
 .tile-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
@@ -459,17 +459,45 @@ body.in-game main.wrap { max-width: none; padding: 0; display: block; }
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  width: 3.5rem;
-  height: 3.5rem;
-  border-radius: 50%;
-  border: 2px solid var(--line);
-  background: var(--panel);
-  color: var(--ink);
+  width: 5.5rem;
+  height: 3.25rem;
+  border-radius: 14px; /* the tiles' corner radius */
+  border: 2px solid #9aa0a6; /* a touch lighter than the grey frame around it */
+  background: #17181b; /* dark, whatever the page theme */
+  color: #fff; /* the icon's bars follow the text color */
   font: 600 0.75rem var(--font-body);
   cursor: pointer;
   z-index: 2;
 }
+.table-menu.corner { width: 3.5rem; height: 3.5rem; }
+.table[data-layout='side'] .table-menu:not(.corner) { width: 3.25rem; height: 5.5rem; } /* four players sit at the sides, so the button stands up */
+/* Three bars (the menu icon) instead of a word: the same from every seat, upside down or not. */
+.table-menu { display: grid; place-items: center; padding: 0; }
+.menu-icon { display: block; width: 1.5rem; height: 1.1rem; background: linear-gradient(currentColor 0 0) top / 100% 3px, linear-gradient(currentColor 0 0) center / 100% 3px, linear-gradient(currentColor 0 0) bottom / 100% 3px; background-repeat: no-repeat; border-radius: 2px; }
+/* Each tile's glow and outline also trace the center Menu button; life.ts sets --hx/--hy/--hw/--hh to where the button sits in the tile. The tile's art clips it. */
+.hub-glow { display: none; }
+.tile-art .hub-glow {
+  display: block;
+  position: absolute;
+  left: var(--hx, 0);
+  top: var(--hy, 0);
+  width: var(--hw, 0);
+  height: var(--hh, 0);
+  z-index: 1; /* above the scrim, like the tile's own edge glow */
+  border-radius: 20px; /* the button's 14px plus the 6px gap */
+  box-shadow: 0 0 34px 4px color-mix(in srgb, var(--tile) 85%, transparent), 0 0 0 3px var(--tile);
+}
+.tile-art[style*='--hub-on: 0'] .hub-glow { display: none; }
 .table-menu.corner { left: auto; top: max(10px, env(safe-area-inset-top, 0px)); right: max(10px, env(safe-area-inset-right, 0px)); transform: none; }
+.table[data-layout='stack']:not([data-players='1'], [data-players='2']) .tile-head { margin-top: 1.6rem; } /* the center Menu button's hole takes the seam end of the tile: the name and Counters sit below it */
+/* Four players: the same 2×2 grid, but every seat is turned a quarter so its area is wide and short: the left column faces left, the right column faces right. A tile is a size container, so its content is laid out in the turned frame (as wide as the tile is tall, and the reverse) and then rotated about the tile's center. */
+.table[data-layout='side'] .tile { container-type: size; }
+.table[data-layout='side'] .tile-inner { position: absolute; flex: none; left: 50%; top: 50%; width: 100cqh; height: 100cqw; transform: translate(-50%, -50%) rotate(90deg); }
+.table[data-layout='side'] .tile:nth-child(2) .tile-inner { transform: translate(-50%, -50%) rotate(-90deg); }
+/* The name and Counters sit on the tile's outer edge (the left edge of the left column, the right edge of the right): Counters at the top end, the name at the bottom end, as the screen is seen. In a turned tile that edge is the bottom of its frame; the left column's frame runs top to bottom the other way, so its order flips. */
+.table[data-layout='side'] .tile-head { grid-area: 2 / 1; align-self: end; }
+.table[data-layout='side'] .tile:nth-child(1) .tile-head { flex-direction: row-reverse; }
+.table[data-layout='side'] .table-row.top .tile-death { transform: none; }
 .table:has(.table-menu.corner) .tile-head { padding-right: 4rem; } /* one player: the corner Menu button leaves the Counters button clear */
 .table-menu:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 /* The reset toast under the menu button, in the look of .toast. Empty, it is the 1px clipped box above. */
@@ -700,3 +728,19 @@ dialog.picker .notice:not(:empty) { margin-block: 0.5rem; }
 /* Add to deck */
 .add-panel { border-top: 1px solid var(--line); padding-top: 0.75rem; }
 .add-notes p { margin: 0.25rem 0 0; color: var(--danger); font-weight: 600; }
+
+/* Arrange seats: the table in small, shaped like the phone (tall held upright, wide held sideways), in dark colors like the table. Each slot is a seat; the chip in it is the player there. */
+.seat-picker { --panel: #17181b; --ink: #f2f3f5; --line: #3a3d42; --muted: #a9adb4; --accent: #8ab4ff; background: var(--panel); color: var(--ink); width: min(92vw, 34rem); }
+.seat-picker .button { background: #24262a; color: var(--ink); border-color: #4a4d52; }
+.seat-picker::backdrop { background: rgb(0 0 0 / 0.7); }
+.seat-grid { display: flex; flex-direction: column; gap: 6px; margin: 0.75rem auto; height: min(52dvh, 26rem); aspect-ratio: 3 / 4; max-width: 100%; }
+@media (orientation: landscape) { .seat-grid { height: max(6rem, calc(100dvh - 16.5rem)); aspect-ratio: 16 / 9; } }
+.seat-row { flex: 1; display: flex; gap: 6px; min-height: 0; }
+.seat-slot { flex: 1; min-width: 0; border-radius: 14px; border: 2px dashed var(--line); display: flex; padding: 2px; }
+.seat-slot.target { border-color: #fff; background: rgb(255 255 255 / 0.12); }
+.seat-chip { flex: 1; min-width: 0; display: grid; place-items: center; align-content: center; gap: 0.1rem; padding: 0.4rem; border-radius: 11px; border: 2px solid transparent; background: var(--tile); color: #fff; font: 600 0.95rem var(--font-body); cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
+.seat-chip[aria-pressed='true'] { border-color: #fff; box-shadow: 0 0 0 3px #8a8f98; }
+.seat-chip.dragging { position: relative; z-index: 2; cursor: grabbing; box-shadow: 0 8px 24px rgb(0 0 0 / 0.6); }
+.seat-chip:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.seat-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.seat-life { font: 700 1.5rem var(--font-display); font-variant-numeric: tabular-nums; }

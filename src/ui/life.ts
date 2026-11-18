@@ -23,6 +23,8 @@ import {
   setArt,
   setColor,
   setFirst,
+  swapSeats,
+  swapSetupSeats,
   setName,
   setPartners,
   undo,
@@ -41,6 +43,7 @@ import { deathOverlay } from './deathArt';
 import { h, icon } from './dom';
 import { buzz } from './native';
 import { openProfilePicker } from './profilePicker';
+import { openSeatPicker } from './seatPicker';
 
 /** A press this long (ms) counts as a hold: ±10 instead of ±1. */
 const HOLD_MS = 500;
@@ -494,6 +497,7 @@ export function createLife(storage: Storage | null, client: ScryfallClient, artS
     return n;
   };
 
+  let hubWatch: ResizeObserver | undefined;
   function drawGame(view: HTMLElement) {
     const me = ++drawId;
     // The tiles of the draw before are gone: let go of their pictures; the new tiles ask again.
@@ -622,7 +626,7 @@ export function createLife(storage: Storage | null, client: ScryfallClient, artS
       const minus = btn(-1);
       const plus = btn(1);
       const nameEl = h('span', { class: 'tile-name' }, p.name);
-      const artEl = h('div', { class: 'tile-art', 'aria-hidden': 'true' });
+      const artEl = h('div', { class: 'tile-art', 'aria-hidden': 'true' }, h('div', { class: 'hub-glow' }));
       const el = h(
         'div',
         { class: 'tile', 'data-player': seat, 'data-rotate': flipped ? '180' : '0', 'data-warn': 'false', 'data-first': 'false', style: `--tile:${p.accent ?? PALETTE[p.color].hex}` },
@@ -1122,6 +1126,29 @@ export function createLife(storage: Storage | null, client: ScryfallClient, artS
     newBtn.addEventListener('click', () => openSetupSheet(newGameDialog));
     const defaultsBtn = h('button', { type: 'button', class: 'button' }, 'Defaults');
     defaultsBtn.addEventListener('click', () => openSetupSheet(defaultsDialog));
+    /** Game menu → Arrange seats: the table in small, drag one player onto another seat to trade places. */
+    const arrangeBtn = h('button', { type: 'button', class: 'button' }, 'Arrange seats');
+    arrangeBtn.addEventListener('click', () => {
+      menu.close();
+      openSeatPicker({
+        host: view,
+        layout: seating(seats.length),
+        players: () => store.game!.players.map((p) => ({ name: p.name, color: p.color, accent: p.accent, life: p.life })),
+        onSwap: (a, b) => {
+          if (me !== drawId || !store.game) return;
+          clearToast();
+          const next = swapSeats(store.game, a, b);
+          if (next === store.game) return;
+          store.game = next;
+          store.setup = swapSetupSeats(store.setup, a, b);
+          // The players moved, they did not just die: set each moved seat's dead state first so no burst plays.
+          for (const s of [a, b]) parts.get(s)!.el.dataset.dead = String(isDead(next, s));
+          updateAll();
+          persist();
+        },
+        onClose: () => open.focus(),
+      });
+    });
     const profilesBtn = h('button', { type: 'button', class: 'button' }, 'Profiles');
     profilesBtn.addEventListener('click', profilesDialog);
     const close = h('button', { type: 'button', class: 'button' }, 'Close');
@@ -1131,19 +1158,55 @@ export function createLife(storage: Storage | null, client: ScryfallClient, artS
       h('h2', { id: 'game-menu-h' }, 'Game menu'),
       notice(),
       awakeNote(),
-      h('div', { class: 'menu-actions' }, undoBtn, rollBtn, newBtn, defaultsBtn, edit, profilesBtn, reset, h('a', { class: 'button', href: '#/' }, 'Leave game'), close),
+      h('div', { class: 'menu-actions' }, undoBtn, rollBtn, newBtn, defaultsBtn, edit, seats.length > 1 ? arrangeBtn : null, profilesBtn, reset, h('a', { class: 'button', href: '#/' }, 'Leave game'), close),
     );
     close.addEventListener('click', () => menu.close());
-    const open = h('button', { type: 'button', class: `table-menu${top.length ? '' : ' corner'}`, 'aria-label': 'Game menu' }, 'Menu');
+    const open = h('button', { type: 'button', class: `table-menu${top.length ? '' : ' corner'}`, 'aria-label': 'Game menu' }, h('span', { class: 'menu-icon', 'aria-hidden': 'true' }));
     open.addEventListener('click', () => {
       refreshUndo();
       menu.showModal();
     });
 
     view.replaceChildren(
-      h('section', { class: 'table', 'aria-label': 'Life totals' }, top.length ? h('div', { class: 'table-row top' }, ...top.map((s) => tile(s, true))) : null, h('div', { class: 'table-row bottom' }, ...bottom.map((s) => tile(s, false))), open, toast, menu),
+      h('section', { class: 'table', 'data-layout': seats.length === 4 ? 'side' : 'stack', 'data-players': String(seats.length), 'aria-label': 'Life totals' }, top.length ? h('div', { class: 'table-row top' }, ...top.map((s) => tile(s, true))) : null, h('div', { class: 'table-row bottom' }, ...bottom.map((s) => tile(s, false))), open, toast, menu),
     );
-    updateAll();
+    /**
+     * Cuts a rounded hole in each tile around the center Menu button, one gap (the 6px between tiles) wider than the button on every side,
+     * and tells the tile's art where the hole is so its glow and outline follow the hole's edge, as they do along the gap to the next player.
+     */
+    const placeHub = () => {
+      if (!open.isConnected || open.classList.contains('corner')) return;
+      const GAP = 6; // the table's gap between tiles, in px (.table in style.css)
+      const R = 14 + GAP; // the button's corner radius plus the gap keeps the two curves concentric
+      const m = open.getBoundingClientRect();
+      for (const { el, art } of parts.values()) {
+        const t = el.getBoundingClientRect();
+        const x = m.left - GAP - t.left;
+        const y = m.top - GAP - t.top;
+        const w = m.width + 2 * GAP;
+        const hh = m.height + 2 * GAP;
+        const near = x < t.width && x + w > 0 && y < t.height && y + hh > 0;
+        art.style.setProperty('--hub-on', near ? '1' : '0');
+        art.style.setProperty('--hx', `${x}px`);
+        art.style.setProperty('--hy', `${y}px`);
+        art.style.setProperty('--hw', `${w}px`);
+        art.style.setProperty('--hh', `${hh}px`);
+        const mask = near
+          ? `url("data:image/svg+xml,${encodeURIComponent(
+              `<svg xmlns='http://www.w3.org/2000/svg' width='${t.width}' height='${t.height}'><path fill-rule='evenodd' d='M0 0H${t.width}V${t.height}H0Z M${x + R} ${y}H${x + w - R}A${R} ${R} 0 0 1 ${x + w} ${y + R}V${y + hh - R}A${R} ${R} 0 0 1 ${x + w - R} ${y + hh}H${x + R}A${R} ${R} 0 0 1 ${x} ${y + hh - R}V${y + R}A${R} ${R} 0 0 1 ${x + R} ${y}Z'/></svg>`,
+            )}")`
+          : '';
+        el.style.setProperty('mask-image', mask);
+        el.style.setProperty('-webkit-mask-image', mask);
+      }
+    };
+    if (typeof ResizeObserver !== 'undefined') {
+      hubWatch?.disconnect();
+      hubWatch = new ResizeObserver(placeHub);
+      hubWatch.observe(view.querySelector('.table')!);
+    }
+    updateAll(); // first, so no style is computed (and no transition starts) from the tiles' alive look
+    placeHub();
   }
 
   return {

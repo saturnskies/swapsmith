@@ -255,6 +255,38 @@ export function resetGame(game: Game): Game {
   return { ...game, players: game.players.map((p) => ({ ...p, life: game.startingLife, poison: 0, cmdr: {} })), history: [], first: null };
 }
 
+/**
+ * Swaps the players in two seats, with everything that belongs to them: life, counters, name, color, art, commander damage
+ * taken and dealt (the damage keys and undo entries name seats, so they follow the commanders), and who goes first.
+ * The same seat or a seat that is not there returns the same game.
+ */
+export function swapSeats(game: Game, a: number, b: number): Game {
+  const n = game.players.length;
+  const ok = (x: number) => Number.isInteger(x) && x >= 0 && x < n;
+  if (a === b || !ok(a) || !ok(b)) return game;
+  const to = (s: number) => (s === a ? b : s === b ? a : s);
+  const rekey = (cmdr: Record<string, number>) => Object.fromEntries(Object.entries(cmdr).map(([k, v]) => { const [from, slot] = k.split(':'); return [`${to(Number(from))}:${slot}`, v]; }));
+  const players = game.players.map((_, i) => {
+    const p = game.players[to(i)];
+    return { ...p, cmdr: rekey(p.cmdr) };
+  });
+  const history = game.history.map((c) => ({ ...c, seat: to(c.seat), target: c.target.kind === 'cmdr' ? { ...c.target, from: to(c.target.from) } : c.target }));
+  return { ...game, players, history, first: game.first === null ? null : to(game.first) };
+}
+
+/** Swaps what is remembered for two seats (names, colors, art, accents) so the next game keeps the new order. */
+export function swapSetupSeats(setup: Setup, a: number, b: number): Setup {
+  const swap = <T>(list: T[] | undefined, fill: T): T[] | undefined => {
+    if (list === undefined) return undefined;
+    const out = Array.from({ length: Math.max(setup.players, list.length) }, (_, i) => (i < list.length ? list[i] : fill));
+    [out[a], out[b]] = [out[b], out[a]];
+    return out;
+  };
+  const arts = swap<ArtRef | null>(setup.arts, null);
+  const accents = swap<string | null>(setup.accents, null);
+  return { ...setup, names: swap(setup.names, '')!, colors: swap(setup.colors, -1)!, ...(arts ? { arts } : {}), ...(accents ? { accents } : {}) };
+}
+
 /** Renames a player (trimmed, at most 24 characters; blank gives the default "Player N"). Not an undoable change. */
 export function setName(game: Game, seat: number, name: string): Game {
   if (!game.players[seat]) return game;

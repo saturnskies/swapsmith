@@ -411,6 +411,19 @@ test.describe('seating', () => {
             return m.a < -0.99 && m.d < -0.99;
           }),
         );
+      if (n === 4) {
+        // Four players sit at the sides: the left column is turned a quarter one way, the right column the other.
+        const quarter = (row: string) =>
+          page.locator(`.table-row.${row} .tile-inner`).evaluateAll((els) =>
+            els.map((e) => {
+              const m = new DOMMatrixReadOnly(getComputedStyle(e).transform);
+              return Math.round(Math.atan2(m.b, m.a) * (180 / Math.PI));
+            }),
+          );
+        expect(await quarter('top')).toEqual([90, -90]);
+        expect(await quarter('bottom')).toEqual([90, -90]);
+        return;
+      }
       expect(await flipped('top')).toEqual(top.map(() => true));
       expect(await flipped('bottom')).toEqual(bottom.map(() => false));
     });
